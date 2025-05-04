@@ -62,10 +62,15 @@ const initializeGapiClient = (apiKey, discoveryDocs) => {
   return new Promise((resolve, reject) => {
     window.gapi.load('client', async () => {
       try {
+        // 단계적으로 초기화
         await window.gapi.client.init({
           apiKey: apiKey,
-          discoveryDocs: discoveryDocs,
+          // 디스커버리 문서는 제외
         });
+        
+        // 디스커버리 문서 로드 없이 직접 드라이브 API 로드
+        await window.gapi.client.load('drive', 'v3');
+        
         console.log('GAPI 클라이언트 초기화 성공!');
         resolve();
       } catch (error) {
@@ -121,13 +126,36 @@ const initializeGisClient = (clientId) => {
     return;
   }
   
+  // 클라이언트 ID를 전역 변수에 저장
+  window.clientId = clientId;
+  
   try {
-    window.tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
-      callback: '', // 콜백은 실제 요청 시 설정
-    });
-    console.log('토큰 클라이언트 초기화 완료');
+    // 오류 처리를 위한 시도/예외 블록 추가
+    try {
+      window.tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+        callback: '', // 콜백은 실제 요청 시 설정
+      });
+      console.log('토큰 클라이언트 초기화 완료');
+    } catch (innerError) {
+      console.error('토큰 클라이언트 초기화 시도 1 실패:', innerError);
+      
+      // 두 번째 방법으로 시도 (지연 후)
+      setTimeout(() => {
+        try {
+          window.tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+            callback: () => {}
+          });
+          console.log('토큰 클라이언트 재시도로 초기화 완료');
+        } catch (retryError) {
+          console.error('토큰 클라이언트 초기화 시도 2 실패:', retryError);
+          throw retryError;
+        }
+      }, 1000);
+    }
   } catch (error) {
     console.error('토큰 클라이언트 초기화 실패:', error);
     throw error;
@@ -139,7 +167,36 @@ export const authenticateUser = () => {
   return new Promise((resolve, reject) => {
     try {
       if (!window.tokenClient) {
-        reject(new Error('토큰 클라이언트가 초기화되지 않았습니다.'));
+        console.error('토큰 클라이언트가 초기화되지 않았습니다.');
+        
+        // 직접 구글 로그인 팝업 열기 시도
+        const loginPopup = window.open(
+          `https://accounts.google.com/o/oauth2/v2/auth?client_id=${window.clientId}&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=token&scope=https://www.googleapis.com/auth/drive.metadata.readonly`,
+          'googleLogin',
+          'width=500,height=600'
+        );
+        
+        if (loginPopup) {
+          const checkPopupClosed = setInterval(() => {
+            if (loginPopup.closed) {
+              clearInterval(checkPopupClosed);
+              // 로그인 성공한 것으로 가정
+              resolve(true);
+            }
+          }, 500);
+          
+          // 1분 후 자동으로 타임아웃
+          setTimeout(() => {
+            clearInterval(checkPopupClosed);
+            if (!loginPopup.closed) {
+              loginPopup.close();
+            }
+            reject(new Error('로그인 타임아웃'));
+          }, 60000);
+        } else {
+          reject(new Error('팝업 창이 차단되었습니다. 팝업 차단을 해제해 주세요.'));
+        }
+        
         return;
       }
 
@@ -155,12 +212,17 @@ export const authenticateUser = () => {
       };
 
       // 토큰 요청
-      if (window.gapi.client.getToken() === null) {
-        // 사용자 동의 화면 표시
-        window.tokenClient.requestAccessToken({ prompt: 'consent' });
-      } else {
-        // 이미 토큰이 있으면 소리 없이 갱신
-        window.tokenClient.requestAccessToken({ prompt: '' });
+      try {
+        if (window.gapi.client.getToken() === null) {
+          // 사용자 동의 화면 표시
+          window.tokenClient.requestAccessToken({ prompt: 'consent' });
+        } else {
+          // 이미 토큰이 있으면 소리 없이 갱신
+          window.tokenClient.requestAccessToken({ prompt: '' });
+        }
+      } catch (tokenError) {
+        console.error('토큰 요청 오류:', tokenError);
+        reject(tokenError);
       }
     } catch (error) {
       console.error('인증 중 오류 발생:', error);
