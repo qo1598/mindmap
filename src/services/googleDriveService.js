@@ -13,7 +13,46 @@ export const loadGoogleDriveAPI = (clientId, apiKey, discoveryDocs) => {
       // 1. 먼저 gapi 스크립트 로드 및 초기화
       loadGapiScript()
         .then(() => {
-          return initializeGapiClient(apiKey, discoveryDocs);
+          return new Promise((resolveGapi, rejectGapi) => {
+            try {
+              // 단순화된 방식으로 GAPI 초기화
+              window.gapi.load('client:auth2', async () => {
+                try {
+                  console.log('GAPI 직접 초기화 시도...');
+                  await window.gapi.client.init({
+                    apiKey: apiKey,
+                    clientId: clientId,
+                    discoveryDocs: discoveryDocs,
+                    scope: 'https://www.googleapis.com/auth/drive.metadata.readonly'
+                  });
+                  console.log('GAPI 직접 초기화 성공!');
+                  resolveGapi();
+                } catch (err) {
+                  console.warn('GAPI 직접 초기화 실패, 대체 방법 시도:', err);
+                  // 백업 방식으로 초기화 시도
+                  window.gapi.client.init({
+                    apiKey: apiKey
+                  }).then(() => {
+                    window.gapi.client.load('drive', 'v3')
+                      .then(() => {
+                        console.log('대체 방식으로 드라이브 API 로드 성공!');
+                        resolveGapi();
+                      })
+                      .catch((loadErr) => {
+                        console.error('드라이브 API 로드 실패:', loadErr);
+                        rejectGapi(loadErr);
+                      });
+                  }).catch((initErr) => {
+                    console.error('GAPI 클라이언트 초기화 실패:', initErr);
+                    rejectGapi(initErr);
+                  });
+                }
+              });
+            } catch (loadErr) {
+              console.error('GAPI 로드 실패:', loadErr);
+              rejectGapi(loadErr);
+            }
+          });
         })
         .then(() => {
           console.log('GAPI 클라이언트 초기화 완료');
@@ -27,7 +66,8 @@ export const loadGoogleDriveAPI = (clientId, apiKey, discoveryDocs) => {
             console.log('GIS 클라이언트 초기화 완료');
             resolve(true);
           } else {
-            throw new Error('Google Identity Services가 로드되지 않았습니다.');
+            console.warn('GIS 객체가 없지만 GAPI 인증으로 계속 진행합니다');
+            resolve(true);
           }
         })
         .catch((error) => {
