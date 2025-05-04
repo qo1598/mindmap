@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MindMap from './components/MindMap';
 import { Box, Button, CircularProgress, Typography, Snackbar, Alert, Switch, FormControlLabel } from '@mui/material';
+import { gapi } from 'gapi-script';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -12,15 +13,82 @@ function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(5); // 5초 단위
   const refreshTimerRef = useRef(null);
+  const [oauthConfig, setOauthConfig] = useState(null);
 
   // 고정된 값 사용
   const CLIENT_ID = '362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com';
   const API_KEY = 'AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70';
   const ROOT_FOLDER_ID = '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
 
+  // OAuth 구성 파일 로드
   useEffect(() => {
-    // 페이지 로드 시 Google API 초기화
-    initializeGoogleAPI();
+    const loadOAuthConfig = async () => {
+      try {
+        const response = await fetch('/credentials/oauth-config.json');
+        if (response.ok) {
+          const config = await response.json();
+          console.log('OAuth 구성 로드됨:', config);
+          setOauthConfig(config);
+        } else {
+          console.error('OAuth 구성 로드 실패:', response.status);
+        }
+      } catch (err) {
+        console.error('OAuth 구성 파일 로드 중 오류 발생:', err);
+      }
+    };
+    
+    loadOAuthConfig();
+  }, []);
+
+  useEffect(() => {
+    // Google API 초기화 함수
+    const initGapi = async () => {
+      try {
+        // 먼저, gapi 클라이언트를 초기화합니다.
+        await new Promise((resolve, reject) => {
+          gapi.load('client:auth2', resolve);
+        });
+
+        console.log('gapi 로드 완료, 클라이언트 초기화 중...');
+        await gapi.client.init({
+          apiKey: API_KEY,
+          clientId: CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+        });
+
+        console.log('gapi 클라이언트 초기화 완료');
+        
+        // 인증 인스턴스 가져오기
+        const authInstance = gapi.auth2.getAuthInstance();
+        
+        if (authInstance) {
+          console.log('Auth 인스턴스 확인 성공');
+          const isSignedIn = authInstance.isSignedIn.get();
+          console.log('현재 로그인 상태:', isSignedIn ? '로그인됨' : '로그인되지 않음');
+          
+          // 로그인 상태 변경 리스너 등록
+          authInstance.isSignedIn.listen((isSignedIn) => {
+            console.log('로그인 상태 변경:', isSignedIn ? '로그인됨' : '로그인되지 않음');
+            updateSigninStatus(isSignedIn);
+          });
+          
+          // 초기 로그인 상태 설정
+          updateSigninStatus(isSignedIn);
+        } else {
+          console.error('Auth 인스턴스를 가져올 수 없습니다.');
+          setError('Google 인증 초기화 중 오류가 발생했습니다: Auth 인스턴스를 가져올 수 없습니다.');
+          setOpenSnackbar(true);
+        }
+      } catch (err) {
+        console.error('Google API 초기화 중 오류 발생:', err);
+        setError(`Google API 초기화 중 오류가 발생했습니다: ${err.message || '알 수 없는 오류'}`);
+        setOpenSnackbar(true);
+      }
+    };
+
+    // 초기화 실행
+    initGapi();
 
     // 컴포넌트 언마운트 시 타이머 정리
     return () => {
@@ -51,60 +119,6 @@ function App() {
     };
   }, [autoRefresh, refreshInterval, isSignedIn]);
 
-  const initializeGoogleAPI = () => {
-    console.log('Google API 초기화 시도...');
-    
-    // GAPI가 이미 로드되어 있는지 확인
-    if (window.gapi) {
-      initializeGapiClient();
-    } else {
-      // GAPI 로드
-      const script = document.createElement('script');
-      script.src = 'https://apis.google.com/js/api.js';
-      script.onload = initializeGapiClient;
-      script.onerror = handleGapiError;
-      document.body.appendChild(script);
-    }
-  };
-
-  const initializeGapiClient = () => {
-    console.log('GAPI 초기화 중...');
-    window.gapi.load('client:auth2', startGapiClient);
-  };
-
-  const startGapiClient = async () => {
-    try {
-      console.log('GAPI 클라이언트 초기화 중...');
-      await window.gapi.client.init({
-        apiKey: API_KEY,
-        clientId: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-      });
-      
-      console.log('GAPI 클라이언트 초기화 완료');
-      
-      // Auth2 인스턴스 접근
-      const authInstance = window.gapi.auth2.getAuthInstance();
-      
-      // 로그인 상태 업데이트
-      updateSigninStatus(authInstance.isSignedIn.get());
-      
-      // 로그인 상태 변경 리스너 등록
-      authInstance.isSignedIn.listen(updateSigninStatus);
-    } catch (error) {
-      console.error('GAPI 클라이언트 초기화 오류:', error);
-      setError('Google API 초기화 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
-      setOpenSnackbar(true);
-    }
-  };
-  
-  const handleGapiError = (error) => {
-    console.error('GAPI 로드 오류:', error);
-    setError('Google API 로드 중 오류가 발생했습니다.');
-    setOpenSnackbar(true);
-  };
-
   const updateSigninStatus = (isSignedIn) => {
     console.log('로그인 상태 업데이트:', isSignedIn);
     setIsSignedIn(isSignedIn);
@@ -119,26 +133,40 @@ function App() {
     try {
       console.log('로그인 시도...');
 
+      // 디버깅 정보 출력
+      console.log('구글 클라이언트 ID:', CLIENT_ID);
+      console.log('현재 URL 오리진:', window.location.origin);
+
       // 사용자 상호작용 이벤트 내에서 팝업을 열어 차단 방지
-      const handleSignInClick = () => {
-        window.gapi.auth2.getAuthInstance().signIn({
-          // 팝업 모드 활성화
-          ux_mode: 'popup',
-          // 로그인 후 현재 페이지로 리디렉션
-          redirect_uri: window.location.origin
-        }).then(() => {
+      const authInstance = gapi.auth2.getAuthInstance();
+      if (!authInstance) {
+        throw new Error('Google 인증 인스턴스를 찾을 수 없습니다.');
+      }
+      
+      const signInOptions = {
+        // 팝업 모드 활성화
+        ux_mode: 'popup',
+        // 동의 화면 항상 표시
+        prompt: 'consent',
+        // 로그인 후 현재 페이지로 리디렉션
+        redirect_uri: window.location.origin
+      };
+      
+      console.log('로그인 옵션:', signInOptions);
+      
+      authInstance.signIn(signInOptions)
+        .then((response) => {
           console.log('로그인 성공');
+          console.log('로그인 응답:', response);
           setIsLoading(false);
-        }).catch((error) => {
+        })
+        .catch((error) => {
           console.error('로그인 오류:', error);
+          console.error('오류 상세:', JSON.stringify(error, null, 2));
           setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
           setOpenSnackbar(true);
           setIsLoading(false);
         });
-      };
-
-      // 즉시 호출
-      handleSignInClick();
     } catch (error) {
       console.error('로그인 오류:', error);
       setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
@@ -221,7 +249,7 @@ function App() {
   const getFolderContents = async (folderId) => {
     try {
       // 폴더 자체 정보 가져오기
-      const folderResponse = await window.gapi.client.drive.files.get({
+      const folderResponse = await gapi.client.drive.files.get({
         fileId: folderId,
         fields: 'id, name, mimeType',
         supportsAllDrives: true
@@ -231,7 +259,7 @@ function App() {
       
       // 폴더 내용 가져오기
       let query = `'${folderId}' in parents and trashed = false`;
-      const response = await window.gapi.client.drive.files.list({
+      const response = await gapi.client.drive.files.list({
         q: query,
         fields: 'files(id, name, mimeType, iconLink)',
         spaces: 'drive',
@@ -253,7 +281,7 @@ function App() {
   // 파일 상세 정보 가져오기 (MindMap 컴포넌트에서 사용)
   window.getFileDetails = async (fileId) => {
     try {
-      const response = await window.gapi.client.drive.files.get({
+      const response = await gapi.client.drive.files.get({
         fileId: fileId,
         fields: 'id, name, mimeType, iconLink, webViewLink, webContentLink, thumbnailLink, size, modifiedTime, createdTime, exportLinks',
         supportsAllDrives: true

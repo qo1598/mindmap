@@ -157,12 +157,14 @@
       log('GAPI 클라이언트 초기화 중...');
       log(`사용 중인 API 키: ${API_KEY}`);
       log(`사용 중인 클라이언트 ID: ${CLIENT_ID}`);
+      log(`현재 URL 오리진: ${window.location.origin}`);
       
       window.gapi.client.init({
         apiKey: API_KEY,
         clientId: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+        redirect_uri: window.location.origin + '/debug.html'
       }).then(function() {
         log('✅ GAPI 클라이언트 초기화 성공');
         

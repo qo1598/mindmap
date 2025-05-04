@@ -9,11 +9,18 @@
       name="description"
       content="구글 드라이브 마인드맵 시각화 도구"
     />
+    <!-- CSP 헤더 제거 (Vercel 배포 시 문제 방지) -->
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>구글 드라이브 마인드맵</title>
     
-    <!-- Google API 스크립트 미리 로드 -->
+    <!-- Google API 클라이언트 미리 로드 -->
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <!-- 구글 OAuth 라이브러리 로드 -->
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    
+    <!-- 구글 API 스크립트 로드 -->
     <script src="https://apis.google.com/js/api.js"></script>
     
     <!-- 구글 인증 사전 설정 -->
@@ -49,6 +56,9 @@
           discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
         }).then(function() {
           console.log('GAPI 클라이언트 초기화 완료!');
+          // meta 태그에 클라이언트 ID 추가
+          document.head.innerHTML += `<meta name="google-signin-client_id" content="${window.googleClientId}">`;
+          
           if (window.onGapiInitialized) {
             window.onGapiInitialized();
           }
