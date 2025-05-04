@@ -6,8 +6,21 @@
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, Content-Type, Accept" }
+        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, Content-Type, Accept" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com; connect-src 'self' https://www.googleapis.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';" }
       ]
     }
-  ]
+  ],
+  "env": {
+    "REACT_APP_GOOGLE_CLIENT_ID": "1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com",
+    "REACT_APP_GOOGLE_API_KEY": "AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw",
+    "REACT_APP_ROOT_FOLDER_ID": "1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9"
+  },
+  "buildCommand": "chmod +x vercel-build.sh && ./vercel-build.sh",
+  "installCommand": "npm install",
+  "build": {
+    "env": {
+      "CI": "false"
+    }
+  }
 } 

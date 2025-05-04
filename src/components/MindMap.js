@@ -17,8 +17,8 @@ const MindMap = ({ data, enableDownload = false }) => {
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
-  // 디지털선도학교 로고 이미지 경로
-  const digitalSchoolLogoPath = '/images/digital_school_logo.png';
+  // 디지털선도학교 로고 이미지 경로 (절대 경로로 수정)
+  const digitalSchoolLogoPath = process.env.PUBLIC_URL + '/images/digital_school_logo.png';
   // 현재 시점과 확대 정도를 저장하는 ref
   const currentViewRef = useRef({ transform: null });
 
@@ -121,7 +121,7 @@ const MindMap = ({ data, enableDownload = false }) => {
       .each(function(d) {
         const node = d3.select(this);
         
-        // 디지털선도학교 로고 이미지 추가
+        // 디지털선도학교 로고 이미지 추가 
         node.append('image')
           .attr('xlink:href', digitalSchoolLogoPath)
           .attr('width', 30)
@@ -129,7 +129,19 @@ const MindMap = ({ data, enableDownload = false }) => {
           .attr('x', -15)
           .attr('y', -15)
           .attr('transform', d => `rotate(${90 - d.x})`)
-          .style('pointer-events', 'none');
+          .style('pointer-events', 'none')
+          .on('error', function() {
+            console.error('로고 이미지 로드 실패:', digitalSchoolLogoPath);
+            // 이미지 로드 실패 시 대체 텍스트 표시
+            d3.select(this).remove();
+            node.append('text')
+              .attr('dy', 5)
+              .attr('text-anchor', 'middle')
+              .attr('transform', d => `rotate(${90 - d.x})`)
+              .text('DS')
+              .attr('fill', '#fff')
+              .attr('font-weight', 'bold');
+          });
       });
     
     // 폴더 노드에 아이콘 추가 (중앙 노드 제외)

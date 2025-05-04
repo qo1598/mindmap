@@ -25,8 +25,36 @@ function App() {
     const initializeGoogleAPI = async () => {
       try {
         console.log('Google API 초기화 중...');
-        const initialized = await loadGoogleDriveAPI(CLIENT_ID, API_KEY, DISCOVERY_DOCS);
-        console.log('Google API 초기화 완료:', initialized);
+        console.log('사용 중인 CLIENT_ID:', CLIENT_ID);
+        console.log('사용 중인 API_KEY:', API_KEY);
+        console.log('사용 중인 DISCOVERY_DOCS:', DISCOVERY_DOCS);
+        
+        // 환경에 따라 다른 초기화 방법 사용
+        // 배포 환경에서는 fallback 방법도 시도
+        try {
+          const initialized = await loadGoogleDriveAPI(CLIENT_ID, API_KEY, DISCOVERY_DOCS);
+          console.log('Google API 초기화 완료:', initialized);
+        } catch (initError) {
+          console.warn('표준 초기화 실패, 대체 방법 시도:', initError);
+          
+          // fallback: 단순화된 방식으로 재시도
+          await new Promise((resolve) => {
+            window.gapi.load('client:auth2', () => {
+              window.gapi.client.init({
+                apiKey: API_KEY,
+                clientId: CLIENT_ID,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+                scope: 'https://www.googleapis.com/auth/drive.metadata.readonly'
+              }).then(() => {
+                console.log('Google API 대체 초기화 완료');
+                resolve();
+              }).catch((err) => {
+                console.error('Google API 대체 초기화 실패:', err);
+                resolve(); // 계속 진행
+              });
+            });
+          });
+        }
         
         // 안전하게 토큰 존재 여부 확인
         const tokenExists = window.gapi && 

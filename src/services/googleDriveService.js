@@ -62,14 +62,26 @@ const initializeGapiClient = (apiKey, discoveryDocs) => {
   return new Promise((resolve, reject) => {
     window.gapi.load('client', async () => {
       try {
-        // 단계적으로 초기화
+        // 단계별 초기화 진행
+        console.log('GAPI 초기화 시작 with API Key:', apiKey);
+        
+        // 먼저 client 초기화
         await window.gapi.client.init({
           apiKey: apiKey,
-          // 디스커버리 문서는 제외
         });
         
-        // 디스커버리 문서 로드 없이 직접 드라이브 API 로드
-        await window.gapi.client.load('drive', 'v3');
+        // 디스커버리 문서 로드를 명시적으로 시도 
+        try {
+          console.log('디스커버리 문서 로드 시도:', discoveryDocs);
+          await Promise.all(
+            discoveryDocs.map(doc => window.gapi.client.load(doc))
+          );
+          console.log('디스커버리 문서 로드 성공');
+        } catch (discoveryError) {
+          console.warn('디스커버리 문서 로드 실패, 직접 드라이브 API 로드:', discoveryError);
+          // 백업 방식: 직접 드라이브 API 로드
+          await window.gapi.client.load('drive', 'v3');
+        }
         
         console.log('GAPI 클라이언트 초기화 성공!');
         resolve();
@@ -166,69 +178,112 @@ const initializeGisClient = (clientId) => {
 export const authenticateUser = () => {
   return new Promise((resolve, reject) => {
     try {
-      if (!window.tokenClient) {
-        console.error('토큰 클라이언트가 초기화되지 않았습니다.');
+      // GIS 기반 인증 시도
+      if (window.tokenClient) {
+        console.log('GIS 기반 인증 시도 중...');
         
-        // 직접 구글 로그인 팝업 열기 시도
-        const loginPopup = window.open(
-          `https://accounts.google.com/o/oauth2/v2/auth?client_id=${window.clientId}&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=token&scope=https://www.googleapis.com/auth/drive.metadata.readonly`,
-          'googleLogin',
-          'width=500,height=600'
-        );
-        
-        if (loginPopup) {
-          const checkPopupClosed = setInterval(() => {
-            if (loginPopup.closed) {
-              clearInterval(checkPopupClosed);
-              // 로그인 성공한 것으로 가정
-              resolve(true);
-            }
-          }, 500);
-          
-          // 1분 후 자동으로 타임아웃
-          setTimeout(() => {
-            clearInterval(checkPopupClosed);
-            if (!loginPopup.closed) {
-              loginPopup.close();
-            }
-            reject(new Error('로그인 타임아웃'));
-          }, 60000);
-        } else {
-          reject(new Error('팝업 창이 차단되었습니다. 팝업 차단을 해제해 주세요.'));
-        }
-        
-        return;
-      }
+        // 콜백 설정
+        window.tokenClient.callback = (response) => {
+          if (response.error) {
+            console.error('GIS 인증 응답 오류:', response);
+            // GIS 인증 실패 시 fallback 인증 시도
+            console.log('대체 인증 방법으로 전환 중...');
+            tryLegacyAuthentication(resolve, reject);
+            return;
+          }
+          console.log('GIS 인증 성공');
+          resolve(true);
+        };
 
-      // 콜백 설정
-      window.tokenClient.callback = (response) => {
-        if (response.error) {
-          console.error('인증 응답 오류:', response);
-          reject(new Error(response.error));
-          return;
+        // 토큰 요청
+        try {
+          if (window.gapi.client.getToken() === null) {
+            // 사용자 동의 화면 표시
+            window.tokenClient.requestAccessToken({ prompt: 'consent' });
+          } else {
+            // 이미 토큰이 있으면 소리 없이 갱신
+            window.tokenClient.requestAccessToken({ prompt: '' });
+          }
+        } catch (tokenError) {
+          console.error('GIS 토큰 요청 오류:', tokenError);
+          // 토큰 요청 실패 시 fallback 인증 시도
+          tryLegacyAuthentication(resolve, reject);
         }
-        console.log('인증 성공');
-        resolve(true);
-      };
-
-      // 토큰 요청
-      try {
-        if (window.gapi.client.getToken() === null) {
-          // 사용자 동의 화면 표시
-          window.tokenClient.requestAccessToken({ prompt: 'consent' });
-        } else {
-          // 이미 토큰이 있으면 소리 없이 갱신
-          window.tokenClient.requestAccessToken({ prompt: '' });
-        }
-      } catch (tokenError) {
-        console.error('토큰 요청 오류:', tokenError);
-        reject(tokenError);
+      } else {
+        console.warn('토큰 클라이언트가 초기화되지 않았습니다. 대체 인증 방법 시도...');
+        tryLegacyAuthentication(resolve, reject);
       }
     } catch (error) {
-      console.error('인증 중 오류 발생:', error);
+      console.error('인증 중 예외 발생:', error);
       reject(error);
     }
   });
+};
+
+// GAPI 직접 인증 (대체 방법)
+const tryLegacyAuthentication = (resolve, reject) => {
+  console.log('GAPI 직접 인증 방법 시도 중...');
+  
+  try {
+    // gapi.auth2가 있는지 확인
+    if (window.gapi.auth2) {
+      window.gapi.auth2.getAuthInstance().signIn()
+        .then(() => {
+          console.log('GAPI 직접 인증 성공');
+          resolve(true);
+        })
+        .catch((error) => {
+          console.error('GAPI 직접 인증 실패:', error);
+          reject(error);
+        });
+    } else {
+      // auth2 객체가 없는 경우 초기화 후 시도
+      window.gapi.load('client:auth2', () => {
+        window.gapi.client.init({
+          clientId: window.clientId,
+          scope: 'https://www.googleapis.com/auth/drive.metadata.readonly'
+        }).then(() => {
+          return window.gapi.auth2.getAuthInstance().signIn();
+        }).then(() => {
+          console.log('GAPI auth2 인증 성공');
+          resolve(true);
+        }).catch((error) => {
+          console.error('GAPI auth2 인증 실패:', error);
+          
+          // 마지막 방법: 직접 구글 로그인 팝업 열기
+          const loginPopup = window.open(
+            `https://accounts.google.com/o/oauth2/v2/auth?client_id=${window.clientId}&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=token&scope=https://www.googleapis.com/auth/drive.metadata.readonly`,
+            'googleLogin',
+            'width=500,height=600'
+          );
+          
+          if (loginPopup) {
+            const checkPopupClosed = setInterval(() => {
+              if (loginPopup.closed) {
+                clearInterval(checkPopupClosed);
+                // 로그인 성공한 것으로 가정
+                resolve(true);
+              }
+            }, 500);
+            
+            // 1분 후 자동으로 타임아웃
+            setTimeout(() => {
+              clearInterval(checkPopupClosed);
+              if (!loginPopup.closed) {
+                loginPopup.close();
+              }
+              reject(new Error('로그인 타임아웃'));
+            }, 60000);
+          } else {
+            reject(new Error('팝업 창이 차단되었습니다. 팝업 차단을 해제해 주세요.'));
+          }
+        });
+      });
+    }
+  } catch (error) {
+    console.error('대체 인증 중 오류 발생:', error);
+    reject(error);
+  }
 };
 
 // 로그아웃
