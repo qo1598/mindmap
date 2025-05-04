@@ -14,10 +14,9 @@ function App() {
   const [refreshInterval, setRefreshInterval] = useState(5); // 5초 단위로 변경
   const refreshTimerRef = useRef(null);
 
-  const CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || 
-    '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com'; // 예시 ID (실제 배포 시 환경변수 사용 권장)
-  const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY || 
-    'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw'; // 예시 키 (실제 배포 시 환경변수 사용 권장)
+  // 하드코딩된 ID와 키를 사용합니다 (환경 변수가 제대로 작동하지 않을 경우를 대비)
+  const CLIENT_ID = '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com';
+  const API_KEY = 'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw';
   const ROOT_FOLDER_ID = '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
   const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
 
