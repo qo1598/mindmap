@@ -69,11 +69,13 @@ function App() {
 
         // 클라이언트 초기화
         console.log('Google API 클라이언트 초기화 중...');
+        
+        // 기본 스코프만 사용 - 더 넓은 스코프는 로그인 시에 요청
         await window.gapi.client.init({
           apiKey: API_KEY,
           clientId: CLIENT_ID,
-          // 스코프 확장 - 공유 드라이브 접근 포함
-          scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly',
+          // 메타데이터 읽기 권한만 요청
+          scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
           discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
         });
         
@@ -160,10 +162,12 @@ function App() {
         throw new Error('Google 인증 인스턴스를 찾을 수 없습니다.');
       }
       
+      // 로그인 시 추가 스코프 요청
       const signInOptions = {
         ux_mode: 'popup', // 팝업 모드 사용
         prompt: 'consent', // 항상 동의 화면 표시
-        redirect_uri: window.location.origin
+        redirect_uri: window.location.origin,
+        scope: 'https://www.googleapis.com/auth/drive.readonly' // 확장된 스코프 요청
       };
       
       console.log('로그인 옵션:', signInOptions);
@@ -173,6 +177,25 @@ function App() {
         .then((response) => {
           console.log('로그인 성공');
           console.log('로그인 응답:', response);
+          
+          // 사용자 정보 확인
+          const user = response.getBasicProfile();
+          if (user) {
+            console.log('사용자 정보:', {
+              id: user.getId(),
+              name: user.getName(),
+              email: user.getEmail()
+            });
+          }
+          
+          // 권한 확인
+          const authResponse = response.getAuthResponse();
+          console.log('권한 응답:', {
+            token: authResponse.access_token ? '획득' : '없음',
+            scopes: authResponse.scope,
+            expiresAt: new Date(authResponse.expires_at).toLocaleString()
+          });
+          
           setIsLoading(false);
         })
         .catch((error) => {
@@ -184,6 +207,8 @@ function App() {
             setError('로그인 팝업이 닫혔습니다. 다시 시도해 주세요.');
           } else if (error.error === 'access_denied') {
             setError('액세스가 거부되었습니다. 계정 권한을 확인해 주세요.');
+          } else if (error.error === 'immediate_failed') {
+            setError('자동 로그인에 실패했습니다. 다시 시도해 주세요.');
           } else {
             setError('로그인 중 오류가 발생했습니다: ' + (error.message || error.error || '알 수 없는 오류'));
           }
@@ -311,29 +336,41 @@ function App() {
       let query = `'${folderId}' in parents and trashed = false`;
       console.log('폴더 내용 쿼리:', query);
       
-      const response = await gapi.client.drive.files.list({
-        q: query,
-        fields: 'files(id, name, mimeType, iconLink)',
-        spaces: 'drive,appDataFolder,photos',  // 모든 가능한 공간 포함
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-        corpora: 'allDrives',  // 'user' 대신 'allDrives' 사용
-        pageSize: 1000
-      });
-      
-      const files = response.result.files || [];
-      console.log('폴더 내용 가져오기 성공:', files.length, '개 항목');
-      
-      // 폴더 자체 정보와 내용 합치기
-      return [folderInfo, ...files];
+      try {
+        const response = await gapi.client.drive.files.list({
+          q: query,
+          fields: 'files(id, name, mimeType, iconLink)',
+          spaces: 'drive',  // 'drive,appDataFolder,photos' 대신 'drive'만 시도
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+          pageSize: 1000
+        });
+        
+        const files = response.result.files || [];
+        console.log('폴더 내용 가져오기 성공:', files.length, '개 항목');
+        
+        // 폴더 자체 정보와 내용 합치기
+        return [folderInfo, ...files];
+      } catch (listError) {
+        console.error('폴더 내용 목록 가져오기 오류:', listError);
+        
+        // 스코프 부족 오류인 경우 권한 다시 요청
+        if (listError.result && listError.result.error && listError.result.error.code === 403) {
+          // 사용자에게 알림
+          setError('폴더 접근 권한이 부족합니다. 로그아웃 후 다시 로그인하여 모든 권한을 허용해주세요.');
+          setOpenSnackbar(true);
+        }
+        
+        throw listError;
+      }
     } catch (error) {
       console.error('폴더 내용을 가져오는 중 오류 발생:', error);
       console.error('오류 상세:', JSON.stringify(error, null, 2));
       
-      if (error.status === 403) {
+      if (error.status === 403 || (error.result && error.result.error && error.result.error.code === 403)) {
         console.error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다.');
-        throw new Error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다. 관리자에게 공유 권한을 요청하세요.');
-      } else if (error.status === 404) {
+        throw new Error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다. 로그아웃 후 다시 로그인하여 모든 권한을 허용해주세요.');
+      } else if (error.status === 404 || (error.result && error.result.error && error.result.error.code === 404)) {
         console.error('폴더를 찾을 수 없습니다:', folderId);
         throw new Error('폴더를 찾을 수 없습니다. 폴더 ID를 확인하세요.');
       } else {
@@ -420,6 +457,35 @@ function App() {
     }
   };
 
+  // 로그아웃 함수 추가
+  const handleSignOut = () => {
+    try {
+      if (!window.gapi || !window.gapi.auth2) {
+        console.error("Google 인증이 초기화되지 않았습니다.");
+        return;
+      }
+
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      if (authInstance) {
+        console.log("로그아웃 시도...");
+        authInstance.signOut().then(() => {
+          console.log("로그아웃 성공");
+          setIsSignedIn(false);
+          setData(null);
+          
+          // 스낵바로 알림
+          setError(null); // 에러 메시지 초기화
+          setOpenSnackbar(true);
+          setTimeout(() => setOpenSnackbar(false), 2000); // 2초 후 자동으로 닫힘
+        });
+      }
+    } catch (error) {
+      console.error("로그아웃 중 오류 발생:", error);
+      setError("로그아웃 중 오류가 발생했습니다: " + error.message);
+      setOpenSnackbar(true);
+    }
+  };
+
   return (
     <Box className="App">
       {!isSignedIn ? (
@@ -490,6 +556,14 @@ function App() {
                 >
                   새로고침
                 </Button>
+                <Button 
+                  variant="outlined" 
+                  color="error"
+                  size="small" 
+                  onClick={handleSignOut}
+                >
+                  로그아웃
+                </Button>
               </Box>
               <MindMap data={data} enableDownload={true} />
             </>
@@ -529,8 +603,12 @@ function App() {
       </Dialog>
 
       <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-        <Alert onClose={handleCloseSnackbar} severity="error" sx={{ width: '100%' }}>
-          {error}
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={error ? "error" : "success"} 
+          sx={{ width: '100%' }}
+        >
+          {error || "작업이 성공적으로 완료되었습니다."}
         </Alert>
       </Snackbar>
     </Box>
