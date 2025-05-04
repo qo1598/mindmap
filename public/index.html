@@ -29,21 +29,5 @@
   <body>
     <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>
     <div id="root"></div>
-    
-    <!-- 디버그 정보 -->
-    <div id="debug-info" style="display: none; position: fixed; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: white; padding: 10px; font-size: 12px; max-width: 400px; max-height: 200px; overflow: auto;">
-      <p>현재 URL: <span id="debug-url"></span></p>
-      <p>오리진: <span id="debug-origin"></span></p>
-      <p>디버깅 정보는 <a href="/debug.html" target="_blank" style="color: yellow;">여기</a>에서 확인할 수 있습니다.</p>
-    </div>
-    
-    <script>
-      // 개발 모드에서만 디버그 정보 표시
-      if (window.location.hostname === 'localhost' || window.location.hostname.includes('vercel.app')) {
-        document.getElementById('debug-info').style.display = 'block';
-        document.getElementById('debug-url').textContent = window.location.href;
-        document.getElementById('debug-origin').textContent = window.location.origin;
-      }
-    </script>
   </body>
 </html> 
