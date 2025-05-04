@@ -66,10 +66,18 @@ const initializeGapiClient = (apiKey, discoveryDocs) => {
           apiKey: apiKey,
           discoveryDocs: discoveryDocs,
         });
+        console.log('GAPI 클라이언트 초기화 성공!');
         resolve();
       } catch (error) {
         console.error('GAPI 클라이언트 초기화 실패:', error);
-        reject(error);
+        // 더 상세한 오류 정보 제공
+        let errorMessage = '초기화 실패';
+        if (error && error.message) {
+          errorMessage = error.message;
+        } else if (error && typeof error === 'object') {
+          errorMessage = JSON.stringify(error);
+        }
+        reject(new Error(`GAPI 초기화 실패: ${errorMessage}`));
       }
     });
   });
@@ -79,6 +87,7 @@ const initializeGapiClient = (apiKey, discoveryDocs) => {
 const loadGisScript = () => {
   return new Promise((resolve, reject) => {
     if (window.google?.accounts?.oauth2) {
+      console.log('GIS 클라이언트가 이미 로드되어 있습니다.');
       resolve();
       return;
     }
@@ -88,14 +97,17 @@ const loadGisScript = () => {
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      // 스크립트가 로드된 후 잠시 대기
+      // 스크립트가 로드된 후 더 길게 대기
+      console.log('GIS 스크립트 로드됨, 초기화 대기 중...');
       setTimeout(() => {
         if (window.google?.accounts?.oauth2) {
+          console.log('GIS 객체 확인 성공!');
           resolve();
         } else {
-          reject(new Error('Google Identity Services 객체를 찾을 수 없습니다.'));
+          console.error('Google Identity Services 객체를 찾을 수 없습니다.');
+          reject(new Error('GIS 초기화 실패: 객체가 로드되지 않았습니다.'));
         }
-      }, 500);
+      }, 1000); // 대기 시간을 1초로 늘림
     };
     script.onerror = (e) => reject(new Error('GIS 로드 실패: ' + e));
     document.body.appendChild(script);
