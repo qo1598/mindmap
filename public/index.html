@@ -15,30 +15,88 @@
     
     <!-- Google API 스크립트 미리 로드 -->
     <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     
     <!-- 구글 인증 사전 설정 -->
     <script>
       // API 키와 클라이언트 ID 설정
       window.googleApiKey = 'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw';
       window.googleClientId = '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com';
+      window.googleScope = 'https://www.googleapis.com/auth/drive.metadata.readonly';
       
-      // GAPI 초기 로드
-      function handleGapiLoaded() {
-        console.log('GAPI 스크립트 로드됨');
+      // 콘솔에 디버그 정보 출력
+      console.log('현재 URL:', window.location.href);
+      console.log('오리진:', window.location.origin);
+      console.log('사용 중인 API 키:', window.googleApiKey);
+      console.log('사용 중인 클라이언트 ID:', window.googleClientId);
+      
+      // GAPI 초기화 함수
+      function handleClientLoad() {
+        console.log('GAPI 스크립트 로드됨, 초기화 시작');
+        if (window.gapi) {
+          window.gapi.load('client:auth2', initClient);
+        } else {
+          console.error('GAPI 객체가 존재하지 않습니다.');
+        }
       }
       
-      // 페이지 로드 완료 시 호출
-      window.onload = function() {
+      // 클라이언트 초기화
+      function initClient() {
+        console.log('GAPI 클라이언트 초기화 중...');
+        window.gapi.client.init({
+          apiKey: window.googleApiKey,
+          clientId: window.googleClientId,
+          scope: window.googleScope,
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+        }).then(function() {
+          console.log('GAPI 클라이언트 초기화 완료!');
+          if (window.onGapiInitialized) {
+            window.onGapiInitialized();
+          }
+        }).catch(function(error) {
+          console.error('GAPI 클라이언트 초기화 실패:', error);
+        });
+      }
+      
+      // 페이지 로드 후 초기화
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('문서 로드 완료');
         if (window.gapi) {
-          console.log('GAPI가 이미 로드되어 있습니다');
-          handleGapiLoaded();
+          handleClientLoad();
+        } else {
+          console.log('GAPI가 아직 로드되지 않았습니다. 스크립트 콜백을 기다립니다.');
         }
-      };
+      });
     </script>
+    
+    <!-- GAPI 로드 콜백 -->
+    <script>
+      function onGapiLoaded() {
+        console.log('GAPI 스크립트 로드 콜백 호출됨');
+        handleClientLoad();
+      }
+    </script>
+    
+    <!-- Google API 스크립트 (콜백 방식) -->
+    <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded"></script>
   </head>
   <body>
     <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>
     <div id="root"></div>
+    
+    <!-- 디버그 정보 -->
+    <div id="debug-info" style="display: none; position: fixed; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: white; padding: 10px; font-size: 12px; max-width: 400px; max-height: 200px; overflow: auto;">
+      <p>현재 URL: <span id="debug-url"></span></p>
+      <p>오리진: <span id="debug-origin"></span></p>
+      <p>디버깅 정보는 <a href="/debug.html" target="_blank" style="color: yellow;">여기</a>에서 확인할 수 있습니다.</p>
+    </div>
+    
+    <script>
+      // 개발 모드에서만 디버그 정보 표시
+      if (window.location.hostname === 'localhost' || window.location.hostname.includes('vercel.app')) {
+        document.getElementById('debug-info').style.display = 'block';
+        document.getElementById('debug-url').textContent = window.location.href;
+        document.getElementById('debug-origin').textContent = window.location.origin;
+      }
+    </script>
   </body>
 </html> 
