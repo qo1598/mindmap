@@ -14,8 +14,8 @@ function App() {
   const refreshTimerRef = useRef(null);
 
   // 고정된 값 사용
-  const CLIENT_ID = '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com';
-  const API_KEY = 'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw';
+  const CLIENT_ID = '362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com';
+  const API_KEY = 'AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70';
   const ROOT_FOLDER_ID = '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
 
   useEffect(() => {

@@ -2,6 +2,11 @@
 
 이 문서는 Google API 콘솔에서 OAuth 클라이언트 ID를 올바르게 설정하는 방법을 안내합니다.
 
+## 현재 사용 중인 API 정보
+
+- **클라이언트 ID**: `362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com`
+- **API 키**: `AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70`
+
 ## 오류 해결: "The OAuth client was not found"
 
 이 오류는 다음과 같은 이유로 발생할 수 있습니다:
