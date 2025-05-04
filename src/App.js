@@ -525,6 +525,18 @@ function App() {
         </Box>
       ) : (
         <Box className="mindmap-wrapper" sx={{ height: '100vh', width: '100vw' }}>
+          {/* 항상 표시되는 로그아웃 버튼 영역 */}
+          <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 2 }}>
+            <Button 
+              variant="outlined" 
+              color="error"
+              size="small" 
+              onClick={handleSignOut}
+            >
+              로그아웃
+            </Button>
+          </Box>
+
           {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
               <CircularProgress />
@@ -568,11 +580,32 @@ function App() {
               <MindMap data={data} enableDownload={true} />
             </>
           ) : (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <Typography variant="h6" sx={{ textAlign: 'center', mt: 4 }}>
-                데이터를 불러오고 있는 중입니다...
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+              <Typography variant="h6" sx={{ textAlign: 'center', mb: 4 }}>
+                데이터를 불러오는 중 오류가 발생했습니다.
               </Typography>
-              <CircularProgress sx={{ ml: 2 }} />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  onClick={handleRefreshNow}
+                >
+                  다시 시도
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  onClick={handleSignOut}
+                >
+                  로그아웃
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  onClick={handleFolderIdChange}
+                >
+                  폴더 ID 변경
+                </Button>
+              </Box>
             </Box>
           )}
         </Box>
