@@ -14,80 +14,17 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>구글 드라이브 마인드맵</title>
     
-    <!-- Google API 클라이언트 미리 로드 -->
-    <script src="https://accounts.google.com/gsi/client"></script>
-    
-    <!-- 구글 OAuth 라이브러리 로드 -->
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
-    
-    <!-- 구글 API 스크립트 로드 -->
-    <script src="https://apis.google.com/js/api.js"></script>
-    
-    <!-- 구글 인증 사전 설정 -->
+    <!-- 기존 중복된 스크립트를 정리하고 단일 스크립트로 로드 -->
     <script>
       // API 키와 클라이언트 ID 설정
       window.googleApiKey = 'AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70';
       window.googleClientId = '362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com';
       window.googleScope = 'https://www.googleapis.com/auth/drive.metadata.readonly';
       
-      // 콘솔에 디버그 정보 출력
+      // 디버깅 정보
       console.log('현재 URL:', window.location.href);
       console.log('오리진:', window.location.origin);
-      console.log('사용 중인 API 키:', window.googleApiKey);
-      console.log('사용 중인 클라이언트 ID:', window.googleClientId);
-      
-      // GAPI 초기화 함수
-      function handleClientLoad() {
-        console.log('GAPI 스크립트 로드됨, 초기화 시작');
-        if (window.gapi) {
-          window.gapi.load('client:auth2', initClient);
-        } else {
-          console.error('GAPI 객체가 존재하지 않습니다.');
-        }
-      }
-      
-      // 클라이언트 초기화
-      function initClient() {
-        console.log('GAPI 클라이언트 초기화 중...');
-        window.gapi.client.init({
-          apiKey: window.googleApiKey,
-          clientId: window.googleClientId,
-          scope: window.googleScope,
-          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
-        }).then(function() {
-          console.log('GAPI 클라이언트 초기화 완료!');
-          // meta 태그에 클라이언트 ID 추가
-          document.head.innerHTML += `<meta name="google-signin-client_id" content="${window.googleClientId}">`;
-          
-          if (window.onGapiInitialized) {
-            window.onGapiInitialized();
-          }
-        }).catch(function(error) {
-          console.error('GAPI 클라이언트 초기화 실패:', error);
-        });
-      }
-      
-      // 페이지 로드 후 초기화
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('문서 로드 완료');
-        if (window.gapi) {
-          handleClientLoad();
-        } else {
-          console.log('GAPI가 아직 로드되지 않았습니다. 스크립트 콜백을 기다립니다.');
-        }
-      });
     </script>
-    
-    <!-- GAPI 로드 콜백 -->
-    <script>
-      function onGapiLoaded() {
-        console.log('GAPI 스크립트 로드 콜백 호출됨');
-        handleClientLoad();
-      }
-    </script>
-    
-    <!-- Google API 스크립트 (콜백 방식) -->
-    <script src="https://apis.google.com/js/api.js?onload=onGapiLoaded"></script>
   </head>
   <body>
     <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>

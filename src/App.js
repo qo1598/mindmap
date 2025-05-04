@@ -46,7 +46,13 @@ function App() {
       try {
         // 먼저, gapi 클라이언트를 초기화합니다.
         await new Promise((resolve, reject) => {
-          gapi.load('client:auth2', resolve);
+          if (!gapi.client) {
+            console.log('gapi.client가 아직 준비되지 않았습니다. client 모듈을 로드합니다.');
+            gapi.load('client:auth2', resolve);
+          } else {
+            console.log('gapi.client가 이미 준비되어 있습니다.');
+            resolve();
+          }
         });
 
         console.log('gapi 로드 완료, 클라이언트 초기화 중...');
@@ -55,6 +61,8 @@ function App() {
           clientId: CLIENT_ID,
           scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
           discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+          ux_mode: 'popup', // 팝업 모드 기본 설정
+          redirect_uri: window.location.origin // 현재 페이지로 리디렉션
         });
 
         console.log('gapi 클라이언트 초기화 완료');
@@ -87,8 +95,10 @@ function App() {
       }
     };
 
-    // 초기화 실행
-    initGapi();
+    // 초기화 실행 (100ms 지연)
+    setTimeout(() => {
+      initGapi();
+    }, 100);
 
     // 컴포넌트 언마운트 시 타이머 정리
     return () => {
@@ -137,23 +147,25 @@ function App() {
       console.log('구글 클라이언트 ID:', CLIENT_ID);
       console.log('현재 URL 오리진:', window.location.origin);
 
-      // 사용자 상호작용 이벤트 내에서 팝업을 열어 차단 방지
+      // 인증 인스턴스 확인
+      if (!gapi.auth2) {
+        throw new Error('Google 인증(auth2)이 초기화되지 않았습니다. 페이지를 새로고침해 주세요.');
+      }
+
       const authInstance = gapi.auth2.getAuthInstance();
       if (!authInstance) {
         throw new Error('Google 인증 인스턴스를 찾을 수 없습니다.');
       }
       
       const signInOptions = {
-        // 팝업 모드 활성화
-        ux_mode: 'popup',
-        // 동의 화면 항상 표시
-        prompt: 'consent',
-        // 로그인 후 현재 페이지로 리디렉션
+        ux_mode: 'popup', // 팝업 모드 사용
+        prompt: 'consent', // 항상 동의 화면 표시
         redirect_uri: window.location.origin
       };
       
       console.log('로그인 옵션:', signInOptions);
       
+      // 팝업 로그인 시도
       authInstance.signIn(signInOptions)
         .then((response) => {
           console.log('로그인 성공');
@@ -163,13 +175,22 @@ function App() {
         .catch((error) => {
           console.error('로그인 오류:', error);
           console.error('오류 상세:', JSON.stringify(error, null, 2));
-          setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+          
+          // 특정 오류 처리
+          if (error.error === 'popup_closed_by_user') {
+            setError('로그인 팝업이 닫혔습니다. 다시 시도해 주세요.');
+          } else if (error.error === 'access_denied') {
+            setError('액세스가 거부되었습니다. 계정 권한을 확인해 주세요.');
+          } else {
+            setError('로그인 중 오류가 발생했습니다: ' + (error.message || error.error || '알 수 없는 오류'));
+          }
+          
           setOpenSnackbar(true);
           setIsLoading(false);
         });
     } catch (error) {
-      console.error('로그인 오류:', error);
-      setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+      console.error('로그인 시도 중 예외 발생:', error);
+      setError('로그인 시도 중 오류: ' + error.message);
       setOpenSnackbar(true);
       setIsLoading(false);
     }
