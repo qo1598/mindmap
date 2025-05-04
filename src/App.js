@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MindMap from './components/MindMap';
-import { Box, Button, CircularProgress, Typography, Snackbar, Alert, Switch, FormControlLabel } from '@mui/material';
+import { Box, Button, CircularProgress, Typography, Snackbar, Alert, Switch, FormControlLabel, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { gapi } from 'gapi-script';
 
 function App() {
@@ -14,11 +14,21 @@ function App() {
   const [refreshInterval, setRefreshInterval] = useState(5); // 5초 단위
   const refreshTimerRef = useRef(null);
   const [oauthConfig, setOauthConfig] = useState(null);
+  const [openFolderDialog, setOpenFolderDialog] = useState(false);
+  const [folderIdInput, setFolderIdInput] = useState('');
 
   // 고정된 값 사용
   const CLIENT_ID = '362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com';
   const API_KEY = 'AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70';
-  const ROOT_FOLDER_ID = '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
+  // 로컬 스토리지에서 저장된 폴더 ID를 가져오거나 기본값 사용
+  const [rootFolderId, setRootFolderId] = useState(() => {
+    return localStorage.getItem('rootFolderId') || '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
+  });
+
+  // 폴더 ID가 변경될 때 로컬 스토리지에 저장
+  useEffect(() => {
+    localStorage.setItem('rootFolderId', rootFolderId);
+  }, [rootFolderId]);
 
   // OAuth 구성 파일 로드
   useEffect(() => {
@@ -62,7 +72,8 @@ function App() {
         await window.gapi.client.init({
           apiKey: API_KEY,
           clientId: CLIENT_ID,
-          scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+          // 스코프 확장 - 공유 드라이브 접근 포함
+          scope: 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly',
           discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
         });
         
@@ -188,13 +199,35 @@ function App() {
     }
   };
 
+  const handleFolderIdChange = () => {
+    setOpenFolderDialog(true);
+    setFolderIdInput(rootFolderId);
+  };
+
+  const handleFolderDialogClose = () => {
+    setOpenFolderDialog(false);
+  };
+
+  const handleFolderIdSubmit = () => {
+    if (folderIdInput && folderIdInput.trim() !== '') {
+      setRootFolderId(folderIdInput.trim());
+      setOpenFolderDialog(false);
+      
+      // 폴더 ID가 변경되었을 때 데이터 다시 로드
+      if (isSignedIn) {
+        loadFolderData();
+      }
+    }
+  };
+
   const loadFolderData = async (isRefresh = false) => {
     if (!isRefresh) {
       setIsLoading(true);
     }
     
     try {
-      const rootFolderData = await fetchFolderStructure(ROOT_FOLDER_ID);
+      console.log('루트 폴더 ID로 데이터 로드 중:', rootFolderId);
+      const rootFolderData = await fetchFolderStructure(rootFolderId);
       setData(rootFolderData);
       
       if (isRefresh) {
@@ -263,11 +296,12 @@ function App() {
     try {
       console.log('폴더 내용 가져오기 시작:', folderId);
       
-      // 폴더 자체 정보 가져오기
+      // 폴더 자체 정보 가져오기 (공유 드라이브 지원 옵션 추가)
       const folderResponse = await gapi.client.drive.files.get({
         fileId: folderId,
         fields: 'id, name, mimeType',
-        supportsAllDrives: true
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true
       });
       
       console.log('폴더 정보 가져오기 성공:', folderResponse.result.name);
@@ -280,9 +314,10 @@ function App() {
       const response = await gapi.client.drive.files.list({
         q: query,
         fields: 'files(id, name, mimeType, iconLink)',
-        spaces: 'drive',
+        spaces: 'drive,appDataFolder,photos',  // 모든 가능한 공간 포함
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
+        corpora: 'allDrives',  // 'user' 대신 'allDrives' 사용
         pageSize: 1000
       });
       
@@ -293,9 +328,14 @@ function App() {
       return [folderInfo, ...files];
     } catch (error) {
       console.error('폴더 내용을 가져오는 중 오류 발생:', error);
+      console.error('오류 상세:', JSON.stringify(error, null, 2));
+      
       if (error.status === 403) {
         console.error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다.');
         throw new Error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다. 관리자에게 공유 권한을 요청하세요.');
+      } else if (error.status === 404) {
+        console.error('폴더를 찾을 수 없습니다:', folderId);
+        throw new Error('폴더를 찾을 수 없습니다. 폴더 ID를 확인하세요.');
       } else {
         throw error;
       }
@@ -424,7 +464,35 @@ function App() {
               <CircularProgress />
             </Box>
           ) : data ? (
-            <MindMap data={data} enableDownload={true} />
+            <>
+              <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  onClick={handleFolderIdChange}
+                >
+                  폴더 ID 변경
+                </Button>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={autoRefresh}
+                      onChange={handleAutoRefreshChange}
+                      size="small"
+                    />
+                  }
+                  label="자동 새로고침"
+                />
+                <Button 
+                  variant="outlined" 
+                  size="small" 
+                  onClick={handleRefreshNow}
+                >
+                  새로고침
+                </Button>
+              </Box>
+              <MindMap data={data} enableDownload={true} />
+            </>
           ) : (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
               <Typography variant="h6" sx={{ textAlign: 'center', mt: 4 }}>
@@ -435,6 +503,31 @@ function App() {
           )}
         </Box>
       )}
+
+      {/* 폴더 ID 변경 대화상자 */}
+      <Dialog open={openFolderDialog} onClose={handleFolderDialogClose}>
+        <DialogTitle>구글 드라이브 폴더 ID 변경</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            구글 드라이브 폴더의 ID를 입력하세요. 폴더 URL에서 찾을 수 있습니다.
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="폴더 ID"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={folderIdInput}
+            onChange={(e) => setFolderIdInput(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleFolderDialogClose}>취소</Button>
+          <Button onClick={handleFolderIdSubmit} variant="contained">적용</Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={handleCloseSnackbar}>
         <Alert onClose={handleCloseSnackbar} severity="error" sx={{ width: '100%' }}>
           {error}
