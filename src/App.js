@@ -118,17 +118,27 @@ function App() {
     setIsLoading(true);
     try {
       console.log('로그인 시도...');
-      window.gapi.auth2.getAuthInstance().signIn()
-        .then(() => {
+
+      // 사용자 상호작용 이벤트 내에서 팝업을 열어 차단 방지
+      const handleSignInClick = () => {
+        window.gapi.auth2.getAuthInstance().signIn({
+          // 팝업 모드 활성화
+          ux_mode: 'popup',
+          // 로그인 후 현재 페이지로 리디렉션
+          redirect_uri: window.location.origin
+        }).then(() => {
           console.log('로그인 성공');
           setIsLoading(false);
-        })
-        .catch((error) => {
+        }).catch((error) => {
           console.error('로그인 오류:', error);
           setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
           setOpenSnackbar(true);
           setIsLoading(false);
         });
+      };
+
+      // 즉시 호출
+      handleSignInClick();
     } catch (error) {
       console.error('로그인 오류:', error);
       setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));

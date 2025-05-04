@@ -37,6 +37,7 @@
   <h1>Google OAuth 디버그 도구</h1>
   
   <div>
+    <h3>현재 인증 상태: <span id="auth-status" style="color: red;">인증되지 않음</span></h3>
     <button id="checkGapi">GAPI 상태 확인</button>
     <button id="loadGapi">GAPI 로드하기</button>
     <button id="initAuth">인증 초기화</button>
@@ -197,7 +198,12 @@
         }
         
         log('Google 로그인 팝업 표시 중...');
-        authInstance.signIn().then(
+        
+        // 팝업 모드와 리디렉션 URI 설정
+        authInstance.signIn({
+          ux_mode: 'popup',
+          redirect_uri: window.location.origin + '/debug.html'
+        }).then(
           function(user) {
             log('✅ 로그인 성공');
             log(`사용자 ID: ${user.getId()}`);
@@ -211,6 +217,10 @@
             const authResponse = user.getAuthResponse();
             log(`액세스 토큰: ${authResponse.access_token.substring(0, 10)}...`);
             log(`토큰 만료 시간: ${new Date(authResponse.expires_at).toLocaleString()}`);
+            
+            // 페이지 상태 업데이트
+            document.getElementById('auth-status').textContent = '인증됨';
+            document.getElementById('auth-status').style.color = 'green';
           },
           function(error) {
             log(`❌ 로그인 실패: ${error.error}`);
