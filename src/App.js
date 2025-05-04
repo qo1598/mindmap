@@ -40,68 +40,60 @@ function App() {
     loadOAuthConfig();
   }, []);
 
+  // Google API 초기화
   useEffect(() => {
-    // Google API 초기화 함수
     const initGapi = async () => {
       try {
-        // 먼저, gapi 클라이언트를 초기화합니다.
-        await new Promise((resolve, reject) => {
-          if (!gapi.client) {
-            console.log('gapi.client가 아직 준비되지 않았습니다. client 모듈을 로드합니다.');
-            gapi.load('client:auth2', resolve);
-          } else {
-            console.log('gapi.client가 이미 준비되어 있습니다.');
-            resolve();
-          }
+        // GAPI가 이미 로드되어 있는지 확인
+        if (!window.gapi) {
+          console.error('GAPI가 로드되지 않았습니다. 페이지를 새로고침하세요.');
+          setError('Google API를 로드할 수 없습니다. 페이지를 새로고침하세요.');
+          setOpenSnackbar(true);
+          return;
+        }
+
+        // client:auth2 모듈 로드
+        await new Promise((resolve) => {
+          window.gapi.load('client:auth2', resolve);
         });
 
-        console.log('gapi 로드 완료, 클라이언트 초기화 중...');
-        await gapi.client.init({
+        // 클라이언트 초기화
+        console.log('Google API 클라이언트 초기화 중...');
+        await window.gapi.client.init({
           apiKey: API_KEY,
           clientId: CLIENT_ID,
           scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
-          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-          ux_mode: 'popup', // 팝업 모드 기본 설정
-          redirect_uri: window.location.origin // 현재 페이지로 리디렉션
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
         });
+        
+        console.log('Google API 클라이언트 초기화 완료');
 
-        console.log('gapi 클라이언트 초기화 완료');
-        
         // 인증 인스턴스 가져오기
-        const authInstance = gapi.auth2.getAuthInstance();
-        
+        const authInstance = window.gapi.auth2.getAuthInstance();
         if (authInstance) {
-          console.log('Auth 인스턴스 확인 성공');
-          const isSignedIn = authInstance.isSignedIn.get();
-          console.log('현재 로그인 상태:', isSignedIn ? '로그인됨' : '로그인되지 않음');
-          
-          // 로그인 상태 변경 리스너 등록
-          authInstance.isSignedIn.listen((isSignedIn) => {
-            console.log('로그인 상태 변경:', isSignedIn ? '로그인됨' : '로그인되지 않음');
-            updateSigninStatus(isSignedIn);
-          });
+          // 로그인 상태 감지 리스너
+          authInstance.isSignedIn.listen(updateSigninStatus);
           
           // 초기 로그인 상태 설정
-          updateSigninStatus(isSignedIn);
+          updateSigninStatus(authInstance.isSignedIn.get());
         } else {
-          console.error('Auth 인스턴스를 가져올 수 없습니다.');
-          setError('Google 인증 초기화 중 오류가 발생했습니다: Auth 인스턴스를 가져올 수 없습니다.');
+          setError('Google 인증 인스턴스를 찾을 수 없습니다.');
           setOpenSnackbar(true);
         }
       } catch (err) {
-        console.error('Google API 초기화 중 오류 발생:', err);
-        setError(`Google API 초기화 중 오류가 발생했습니다: ${err.message || '알 수 없는 오류'}`);
+        console.error('Google API 초기화 오류:', err);
+        setError(`Google API 초기화 오류: ${err.message || '알 수 없는 오류'}`);
         setOpenSnackbar(true);
       }
     };
 
-    // 초기화 실행 (100ms 지연)
-    setTimeout(() => {
+    // 스크립트 로드 후 지연 초기화 (500ms)
+    const timeoutId = setTimeout(() => {
       initGapi();
-    }, 100);
+    }, 500);
 
-    // 컴포넌트 언마운트 시 타이머 정리
     return () => {
+      clearTimeout(timeoutId);
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current);
       }
@@ -148,11 +140,11 @@ function App() {
       console.log('현재 URL 오리진:', window.location.origin);
 
       // 인증 인스턴스 확인
-      if (!gapi.auth2) {
+      if (!window.gapi || !window.gapi.auth2) {
         throw new Error('Google 인증(auth2)이 초기화되지 않았습니다. 페이지를 새로고침해 주세요.');
       }
 
-      const authInstance = gapi.auth2.getAuthInstance();
+      const authInstance = window.gapi.auth2.getAuthInstance();
       if (!authInstance) {
         throw new Error('Google 인증 인스턴스를 찾을 수 없습니다.');
       }
@@ -269,6 +261,8 @@ function App() {
   // 폴더 내용 가져오기
   const getFolderContents = async (folderId) => {
     try {
+      console.log('폴더 내용 가져오기 시작:', folderId);
+      
       // 폴더 자체 정보 가져오기
       const folderResponse = await gapi.client.drive.files.get({
         fileId: folderId,
@@ -276,10 +270,13 @@ function App() {
         supportsAllDrives: true
       });
       
+      console.log('폴더 정보 가져오기 성공:', folderResponse.result.name);
       const folderInfo = folderResponse.result;
       
       // 폴더 내용 가져오기
       let query = `'${folderId}' in parents and trashed = false`;
+      console.log('폴더 내용 쿼리:', query);
+      
       const response = await gapi.client.drive.files.list({
         q: query,
         fields: 'files(id, name, mimeType, iconLink)',
@@ -290,12 +287,18 @@ function App() {
       });
       
       const files = response.result.files || [];
+      console.log('폴더 내용 가져오기 성공:', files.length, '개 항목');
       
       // 폴더 자체 정보와 내용 합치기
       return [folderInfo, ...files];
     } catch (error) {
       console.error('폴더 내용을 가져오는 중 오류 발생:', error);
-      throw error;
+      if (error.status === 403) {
+        console.error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다.');
+        throw new Error('접근 권한 오류: 해당 폴더에 접근할 권한이 없습니다. 관리자에게 공유 권한을 요청하세요.');
+      } else {
+        throw error;
+      }
     }
   };
 
@@ -325,6 +328,56 @@ function App() {
 
   const handleRefreshNow = () => {
     loadFolderData(true);
+  };
+
+  const startGapiClient = async () => {
+    try {
+      console.log('GAPI 클라이언트 초기화 중...');
+      console.log('API 키:', API_KEY);
+      console.log('클라이언트 ID:', CLIENT_ID);
+      console.log('현재 URL 오리진:', window.location.origin);
+      
+      // 클라이언트 초기화 옵션
+      const initOptions = {
+        apiKey: API_KEY,
+        clientId: CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+      };
+      
+      console.log('클라이언트 초기화 옵션:', initOptions);
+      
+      // 클라이언트 초기화 시도
+      await gapi.client.init(initOptions);
+      
+      console.log('gapi 클라이언트 초기화 완료');
+      
+      // 인증 인스턴스 가져오기
+      const authInstance = gapi.auth2.getAuthInstance();
+      
+      if (authInstance) {
+        console.log('Auth 인스턴스 확인 성공');
+        const isSignedIn = authInstance.isSignedIn.get();
+        console.log('현재 로그인 상태:', isSignedIn ? '로그인됨' : '로그인되지 않음');
+        
+        // 로그인 상태 변경 리스너 등록
+        authInstance.isSignedIn.listen((isSignedIn) => {
+          console.log('로그인 상태 변경:', isSignedIn ? '로그인됨' : '로그인되지 않음');
+          updateSigninStatus(isSignedIn);
+        });
+        
+        // 초기 로그인 상태 설정
+        updateSigninStatus(isSignedIn);
+      } else {
+        console.error('Auth 인스턴스를 가져올 수 없습니다.');
+        setError('Google 인증 초기화 중 오류가 발생했습니다: Auth 인스턴스를 가져올 수 없습니다.');
+        setOpenSnackbar(true);
+      }
+    } catch (err) {
+      console.error('Google API 초기화 중 오류 발생:', err);
+      setError(`Google API 초기화 중 오류가 발생했습니다: ${err.message || '알 수 없는 오류'}`);
+      setOpenSnackbar(true);
+    }
   };
 
   return (
