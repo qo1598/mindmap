@@ -7,7 +7,6 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import { getFileDetails } from '../services/googleDriveService';
 
 const MindMap = ({ data, enableDownload = false }) => {
   const svgRef = useRef(null);
@@ -179,7 +178,8 @@ const MindMap = ({ data, enableDownload = false }) => {
     // 파일 노드인 경우
     if (d.data.type === 'file') {
       try {
-        const details = await getFileDetails(d.data.id);
+        // 전역 window.getFileDetails 함수 사용
+        const details = await window.getFileDetails(d.data.id);
         
         if (enableDownload) {
           // 다운로드 처리

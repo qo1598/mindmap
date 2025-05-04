@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MindMap from './components/MindMap';
 import { Box, Button, CircularProgress, Typography, Snackbar, Alert, Switch, FormControlLabel } from '@mui/material';
-import { loadGoogleDriveAPI, authenticateUser, getFolderContents } from './services/googleDriveService';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -11,69 +10,16 @@ function App() {
   const [data, setData] = useState(null);
   const [openSnackbar, setOpenSnackbar] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState(5); // 5초 단위로 변경
+  const [refreshInterval, setRefreshInterval] = useState(5); // 5초 단위
   const refreshTimerRef = useRef(null);
 
-  // 하드코딩된 ID와 키를 사용합니다 (환경 변수가 제대로 작동하지 않을 경우를 대비)
+  // 고정된 값 사용
   const CLIENT_ID = '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com';
   const API_KEY = 'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw';
   const ROOT_FOLDER_ID = '1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9';
-  const DISCOVERY_DOCS = ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'];
 
   useEffect(() => {
-    const initializeGoogleAPI = async () => {
-      try {
-        console.log('Google API 초기화 중...');
-        console.log('사용 중인 CLIENT_ID:', CLIENT_ID);
-        console.log('사용 중인 API_KEY:', API_KEY);
-        console.log('사용 중인 DISCOVERY_DOCS:', DISCOVERY_DOCS);
-        
-        // 환경에 따라 다른 초기화 방법 사용
-        // 배포 환경에서는 fallback 방법도 시도
-        try {
-          const initialized = await loadGoogleDriveAPI(CLIENT_ID, API_KEY, DISCOVERY_DOCS);
-          console.log('Google API 초기화 완료:', initialized);
-        } catch (initError) {
-          console.warn('표준 초기화 실패, 대체 방법 시도:', initError);
-          
-          // fallback: 단순화된 방식으로 재시도
-          await new Promise((resolve) => {
-            window.gapi.load('client:auth2', () => {
-              window.gapi.client.init({
-                apiKey: API_KEY,
-                clientId: CLIENT_ID,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-                scope: 'https://www.googleapis.com/auth/drive.metadata.readonly'
-              }).then(() => {
-                console.log('Google API 대체 초기화 완료');
-                resolve();
-              }).catch((err) => {
-                console.error('Google API 대체 초기화 실패:', err);
-                resolve(); // 계속 진행
-              });
-            });
-          });
-        }
-        
-        // 안전하게 토큰 존재 여부 확인
-        const tokenExists = window.gapi && 
-                          window.gapi.client && 
-                          typeof window.gapi.client.getToken === 'function' && 
-                          window.gapi.client.getToken() !== null;
-                          
-        console.log('인증 토큰 존재 여부:', tokenExists);
-        setIsSignedIn(tokenExists);
-        
-        if (tokenExists) {
-          loadFolderData();
-        }
-      } catch (err) {
-        console.error('API 초기화 오류:', err);
-        setError('Google API 초기화 중 오류가 발생했습니다: ' + (err.message || '알 수 없는 오류'));
-        setOpenSnackbar(true);
-      }
-    };
-    
+    // 페이지 로드 시 Google API 초기화
     initializeGoogleAPI();
 
     // 컴포넌트 언마운트 시 타이머 정리
@@ -84,7 +30,7 @@ function App() {
     };
   }, []);
 
-  // 자동 새로고침 설정 변경 시 타이머 설정
+  // 자동 새로고침 설정
   useEffect(() => {
     if (refreshTimerRef.current) {
       clearInterval(refreshTimerRef.current);
@@ -105,32 +51,88 @@ function App() {
     };
   }, [autoRefresh, refreshInterval, isSignedIn]);
 
-  const handleSignIn = async () => {
+  const initializeGoogleAPI = () => {
+    console.log('Google API 초기화 시도...');
+    
+    // GAPI가 이미 로드되어 있는지 확인
+    if (window.gapi) {
+      initializeGapiClient();
+    } else {
+      // GAPI 로드
+      const script = document.createElement('script');
+      script.src = 'https://apis.google.com/js/api.js';
+      script.onload = initializeGapiClient;
+      script.onerror = handleGapiError;
+      document.body.appendChild(script);
+    }
+  };
+
+  const initializeGapiClient = () => {
+    console.log('GAPI 초기화 중...');
+    window.gapi.load('client:auth2', startGapiClient);
+  };
+
+  const startGapiClient = async () => {
+    try {
+      console.log('GAPI 클라이언트 초기화 중...');
+      await window.gapi.client.init({
+        apiKey: API_KEY,
+        clientId: CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.metadata.readonly',
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+      });
+      
+      console.log('GAPI 클라이언트 초기화 완료');
+      
+      // Auth2 인스턴스 접근
+      const authInstance = window.gapi.auth2.getAuthInstance();
+      
+      // 로그인 상태 업데이트
+      updateSigninStatus(authInstance.isSignedIn.get());
+      
+      // 로그인 상태 변경 리스너 등록
+      authInstance.isSignedIn.listen(updateSigninStatus);
+    } catch (error) {
+      console.error('GAPI 클라이언트 초기화 오류:', error);
+      setError('Google API 초기화 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+      setOpenSnackbar(true);
+    }
+  };
+  
+  const handleGapiError = (error) => {
+    console.error('GAPI 로드 오류:', error);
+    setError('Google API 로드 중 오류가 발생했습니다.');
+    setOpenSnackbar(true);
+  };
+
+  const updateSigninStatus = (isSignedIn) => {
+    console.log('로그인 상태 업데이트:', isSignedIn);
+    setIsSignedIn(isSignedIn);
+    
+    if (isSignedIn) {
+      loadFolderData();
+    }
+  };
+
+  const handleSignIn = () => {
     setIsLoading(true);
     try {
       console.log('로그인 시도...');
-      const success = await authenticateUser();
-      console.log('로그인 결과:', success);
-      setIsSignedIn(success);
-      if (success) {
-        loadFolderData();
-      }
-    } catch (err) {
-      console.error('로그인 중 오류 발생:', err);
-      // 오류 메시지 처리 개선
-      let errorMessage = '인증 중 오류가 발생했습니다';
-      if (err && err.message) {
-        errorMessage += ': ' + err.message;
-      } else if (err && typeof err === 'object') {
-        errorMessage += ': ' + JSON.stringify(err);
-      } else if (err) {
-        errorMessage += ': ' + err;
-      } else {
-        errorMessage += ': 알 수 없는 오류';
-      }
-      setError(errorMessage);
+      window.gapi.auth2.getAuthInstance().signIn()
+        .then(() => {
+          console.log('로그인 성공');
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          console.error('로그인 오류:', error);
+          setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+          setOpenSnackbar(true);
+          setIsLoading(false);
+        });
+    } catch (error) {
+      console.error('로그인 오류:', error);
+      setError('로그인 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
       setOpenSnackbar(true);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -202,6 +204,55 @@ function App() {
     } catch (err) {
       console.error('폴더 구조를 가져오는 중 오류 발생했습니다:', err);
       throw err;
+    }
+  };
+
+  // 폴더 내용 가져오기
+  const getFolderContents = async (folderId) => {
+    try {
+      // 폴더 자체 정보 가져오기
+      const folderResponse = await window.gapi.client.drive.files.get({
+        fileId: folderId,
+        fields: 'id, name, mimeType',
+        supportsAllDrives: true
+      });
+      
+      const folderInfo = folderResponse.result;
+      
+      // 폴더 내용 가져오기
+      let query = `'${folderId}' in parents and trashed = false`;
+      const response = await window.gapi.client.drive.files.list({
+        q: query,
+        fields: 'files(id, name, mimeType, iconLink)',
+        spaces: 'drive',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageSize: 1000
+      });
+      
+      const files = response.result.files || [];
+      
+      // 폴더 자체 정보와 내용 합치기
+      return [folderInfo, ...files];
+    } catch (error) {
+      console.error('폴더 내용을 가져오는 중 오류 발생:', error);
+      throw error;
+    }
+  };
+
+  // 파일 상세 정보 가져오기 (MindMap 컴포넌트에서 사용)
+  window.getFileDetails = async (fileId) => {
+    try {
+      const response = await window.gapi.client.drive.files.get({
+        fileId: fileId,
+        fields: 'id, name, mimeType, iconLink, webViewLink, webContentLink, thumbnailLink, size, modifiedTime, createdTime, exportLinks',
+        supportsAllDrives: true
+      });
+      
+      return response.result;
+    } catch (error) {
+      console.error('파일 상세 정보를 가져오는 중 오류 발생:', error);
+      throw error;
     }
   };
 

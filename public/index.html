@@ -12,6 +12,30 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>구글 드라이브 마인드맵</title>
+    
+    <!-- Google API 스크립트 미리 로드 -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- 구글 인증 사전 설정 -->
+    <script>
+      // API 키와 클라이언트 ID 설정
+      window.googleApiKey = 'AIzaSyBVxLt7aRqNmDRL6NLq2CRSVKrPb3IeYIw';
+      window.googleClientId = '1033835493377-4gk2e80bhgsr51j6f9j9vo5mp7k7j1ad.apps.googleusercontent.com';
+      
+      // GAPI 초기 로드
+      function handleGapiLoaded() {
+        console.log('GAPI 스크립트 로드됨');
+      }
+      
+      // 페이지 로드 완료 시 호출
+      window.onload = function() {
+        if (window.gapi) {
+          console.log('GAPI가 이미 로드되어 있습니다');
+          handleGapiLoaded();
+        }
+      };
+    </script>
   </head>
   <body>
     <noscript>이 앱을 실행하려면 JavaScript를 활성화해야 합니다.</noscript>
