@@ -1,94 +1,127 @@
-# Google API 설정 방법
+# Google Drive 공개 접근 설정 방법
 
-이 문서는 Google API 콘솔에서 OAuth 클라이언트 ID를 올바르게 설정하는 방법을 안내합니다.
+이 문서는 OAuth 로그인 없이 공개 Google Drive 폴더에 접근하는 방법을 안내합니다.
+
+## 🎉 업데이트: 로그인 없는 공개 접근
+
+이제 **OAuth 로그인 없이** 공개된 Google Drive 폴더를 마인드맵으로 볼 수 있습니다!
 
 ## 현재 사용 중인 API 정보
 
-- **클라이언트 ID**: `362381193698-ubvpejukf8u2e8vkq1nlkeofl83q7l56.apps.googleusercontent.com`
 - **API 키**: `AIzaSyBzDqaWmNVJ8-0c-m_niBBOMz-dgAkQV70`
+- **접근 방식**: 공개 폴더 API 키 기반 접근
 
-## 오류 해결: "The OAuth client was not found"
+## 🚀 사용 방법
 
-이 오류는 다음과 같은 이유로 발생할 수 있습니다:
+### 1. Google Drive 폴더를 공개로 설정
 
-1. OAuth 클라이언트 ID가 Google API 콘솔에서 잘못 구성되었습니다.
-2. 배포된 애플리케이션의 도메인(URL)이 Google API 콘솔에 승인된 도메인으로 등록되지 않았습니다.
-3. 클라이언트 ID가 애플리케이션에서 올바르게 사용되지 않고 있습니다.
+1. **Google Drive**에서 공유하고 싶은 폴더를 우클릭합니다.
+2. **"공유"**를 선택합니다.
+3. **"링크가 있는 모든 사용자"**로 설정합니다.
+4. 권한을 **"뷰어"**로 설정합니다.
+5. **"링크 복사"**를 클릭합니다.
 
-## 해결 방법
+### 2. 폴더 ID 추출
 
-### 1. Google Cloud Console에서 OAuth 설정 확인
-
-1. [Google Cloud Console](https://console.cloud.google.com/)에 접속하세요.
-2. 프로젝트를 선택하거나 새 프로젝트를 만드세요.
-3. 왼쪽 메뉴에서 "API 및 서비스" > "사용자 인증 정보"로 이동하세요.
-4. "OAuth 2.0 클라이언트 ID" 섹션에서 사용 중인 클라이언트 ID를 찾아 클릭하세요.
-5. 다음 설정을 확인하고 필요한 경우 업데이트하세요:
-
-#### 승인된 JavaScript 원본 (Authorized JavaScript origins)
-
-배포된 사이트의 도메인을 추가해야 합니다. 다음 URL을 추가하세요:
+공유 링크에서 폴더 ID를 추출합니다:
 
 ```
-https://mindmap-seven-amber.vercel.app
-https://mindmap-qo1598.vercel.app
-https://qo1598-mindmap.vercel.app
+예시 링크: https://drive.google.com/drive/folders/1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9?usp=sharing
+폴더 ID: 1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9
 ```
 
-또한 로컬 개발을 위해 다음 URL도 추가하는 것이 좋습니다:
+### 3. 앱에서 폴더 설정
 
+1. 앱을 실행합니다.
+2. **"폴더 변경"** 버튼을 클릭합니다.
+3. 추출한 폴더 ID를 입력합니다.
+4. **"적용"** 버튼을 클릭합니다.
+
+## ✨ 새로운 기능들
+
+### 🔒 OAuth 로그인 불필요
+- 사용자가 Google 계정에 로그인할 필요 없음
+- 테스트 사용자 등록 불필요
+- 즉시 사용 가능
+
+### 🌐 범용성
+- 누구나 링크만 있으면 접근 가능
+- 개인정보 수집 없음
+- 공개 데이터만 접근
+
+### ⚡ 자동 새로고침
+- 30초마다 자동으로 데이터 새로고침
+- 실시간 폴더 변경사항 반영
+
+## 📋 제한사항
+
+### API 할당량
+- Google Drive API의 일일 할당량: 100,000,000 할당량 단위
+- 일반적인 사용에는 충분함
+
+### 접근 권한
+- **공개로 설정된 폴더만** 접근 가능
+- 개인 폴더나 제한된 폴더는 접근 불가
+- 파일 수정/삭제 불가 (읽기 전용)
+
+### 폴더 구조
+- 최대 3단계 깊이까지 탐색
+- 대용량 폴더의 경우 로딩 시간이 길 수 있음
+
+## 🛠 개발자를 위한 정보
+
+### API 키 관리
+현재 사용 중인 API 키는 다음 제한이 있습니다:
+- HTTP 리퍼러 제한: `*.vercel.app/*`, `localhost:*`
+- Google Drive API만 활성화
+
+### 보안 고려사항
+- API 키가 클라이언트에 노출됨 (공개 접근용이므로 안전)
+- 개인 데이터 접근 불가
+- 읽기 전용 접근
+
+## 🔧 문제 해결
+
+### "폴더에 접근할 수 없습니다" 오류
+1. 폴더가 **"링크가 있는 모든 사용자"**로 설정되었는지 확인
+2. 폴더 ID가 올바른지 확인
+3. 폴더가 삭제되지 않았는지 확인
+
+### "API 초기화 실패" 오류
+1. 인터넷 연결 확인
+2. 페이지 새로고침
+3. 브라우저 캐시 삭제
+
+### 데이터 로드 속도가 느림
+1. 폴더 내 파일/하위폴더 수가 많은 경우 정상
+2. 자동 새로고침 간격을 늘려서 부하 감소
+
+## 🎯 권장 사용법
+
+### 최적의 폴더 구조
 ```
-http://localhost:3000
-http://localhost:5000
+📁 루트 폴더 (공개)
+├── 📁 카테고리 1
+│   ├── 📄 문서1.pdf
+│   └── 📄 문서2.docx
+├── 📁 카테고리 2
+│   ├── 📁 하위 카테고리
+│   └── 📄 이미지.jpg
+└── 📄 README.txt
 ```
 
-#### 승인된 리디렉션 URI (Authorized redirect URIs)
+### 성능 최적화
+- 폴더당 파일 수를 50개 이하로 유지
+- 깊이를 3단계 이하로 유지
+- 대용량 파일 최소화
 
-웹 애플리케이션의 경우 인증 후 리디렉션할 URL을 지정해야 합니다. 다음 URL을 추가하세요:
+## 📞 지원
 
-```
-https://mindmap-seven-amber.vercel.app
-https://mindmap-qo1598.vercel.app
-https://qo1598-mindmap.vercel.app
-https://mindmap-seven-amber.vercel.app/
-https://mindmap-qo1598.vercel.app/
-https://qo1598-mindmap.vercel.app/
-```
+문제가 발생하거나 개선 제안이 있으시면:
+1. GitHub Issues에 등록
+2. 브라우저 콘솔 로그 확인
+3. 폴더 ID와 오류 메시지 포함하여 문의
 
-### 2. OAuth 동의 화면 설정
+---
 
-1. Google Cloud Console의 "API 및 서비스" > "OAuth 동의 화면"으로 이동하세요.
-2. 애플리케이션 유형을 선택하세요 (External 또는 Internal).
-3. 필요한 정보를 입력하세요:
-   - 앱 이름
-   - 사용자 지원 이메일
-   - 개발자 연락처 정보
-4. "저장 후 계속"을 클릭하세요.
-5. 필요한 스코프를 추가하세요 (https://www.googleapis.com/auth/drive.metadata.readonly).
-6. "저장 후 계속"을 클릭하세요.
-7. 테스트 사용자를 추가하세요 (필요한 경우).
-8. "저장 후 계속"을 클릭하세요.
-
-### 3. API 활성화
-
-1. Google Cloud Console의 "API 및 서비스" > "라이브러리"로 이동하세요.
-2. "Google Drive API"를 검색하여 선택하세요.
-3. "사용 설정" 버튼을 클릭하여 API를 활성화하세요.
-
-### 4. 변경사항 적용 후 테스트
-
-1. Google Cloud Console에서 변경사항을 저장한 후 5-10분 정도 기다려 변경사항이 적용되도록 하세요.
-2. 다시 애플리케이션을 테스트하세요.
-
-## 디버깅
-
-더 자세한 오류 정보를 얻으려면:
-
-1. 배포된 사이트에서 `/debug.html` 페이지에 접속하세요 (예: https://mindmap-seven-amber.vercel.app/debug.html).
-2. 이 페이지에서 제공하는 디버깅 도구를 사용하여 Google API 연결 문제를 진단하세요.
-3. 콘솔 로그를 확인하여 더 자세한 오류 메시지를 확인하세요.
-
-## 추가 참고 사항
-
-- 클라이언트 ID와 API 키가 애플리케이션 코드에서 올바르게 사용되고 있는지 확인하세요.
-- OAuth 동의 화면에서 애플리케이션 상태가 "테스트 중"인 경우, 승인된 테스트 사용자만 애플리케이션에 접근할 수 있습니다. 
+**이제 OAuth 설정 없이도 공개 Google Drive 폴더를 아름다운 마인드맵으로 즐겨보세요! 🎨** 
