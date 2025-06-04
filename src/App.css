@@ -6,8 +6,80 @@
 }
 
 .mindmap-wrapper {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9eef2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   transition: all 0.3s ease;
+  position: relative;
+}
+
+/* Prezi 스타일 마인드맵 */
+.node {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.node:hover {
+  filter: brightness(1.1) drop-shadow(0 4px 8px rgba(0,0,0,0.3)) !important;
+}
+
+.link {
+  transition: all 0.5s ease;
+}
+
+.link:hover {
+  stroke-width: 3px !important;
+  stroke: #4285F4 !important;
+}
+
+.node-label {
+  transition: all 0.3s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+.label-bg {
+  transition: all 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+/* 부드러운 애니메이션 */
+@keyframes nodeEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(20px);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes linkEntrance {
+  0% {
+    stroke-dasharray: 5,5;
+    stroke-dashoffset: 10;
+    opacity: 0;
+  }
+  100% {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* 글로우 효과 */
+@keyframes glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px rgba(66, 133, 244, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(66, 133, 244, 0.6));
+  }
+}
+
+.central-node {
+  animation: glow 2s ease-in-out infinite;
 }
 
 @keyframes fadeIn {
@@ -34,22 +106,28 @@
 }
 
 .zoom-button {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
   border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
 }
 
 .zoom-button:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+}
+
+.zoom-button:active {
+  transform: scale(0.95);
 }
 
 .login-container {
@@ -59,4 +137,34 @@
   border-radius: 8px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   background-color: white;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .zoom-controls {
+    bottom: 15px;
+    right: 15px;
+    gap: 8px;
+  }
+  
+  .zoom-button {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .node-label {
+    font-size: 10px !important;
+  }
+}
+
+/* 접근성 개선 */
+@media (prefers-reduced-motion: reduce) {
+  .node,
+  .link,
+  .node-label,
+  .label-bg,
+  .zoom-button {
+    transition: none !important;
+    animation: none !important;
+  }
 } 

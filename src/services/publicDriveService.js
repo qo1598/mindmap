@@ -68,10 +68,27 @@ export const getPublicFolderStructure = async (folderId, depth = 0, maxDepth = 3
   try {
     const contents = await getPublicFolderContents(folderId);
     
+    // 루트 폴더 정보 가져오기
+    let folderName = 'Root';
+    if (depth === 0) {
+      try {
+        const folderInfo = await window.gapi.client.drive.files.get({
+          fileId: folderId,
+          fields: 'name'
+        });
+        folderName = folderInfo.result.name || 'Root';
+      } catch (error) {
+        console.warn('폴더 이름 조회 실패, 기본값 사용:', error);
+      }
+    }
+    
     const folderStructure = {
-      id: folderId,
-      name: depth === 0 ? 'Root' : '폴더',
-      type: 'folder',
+      data: {
+        id: folderId,
+        name: depth === 0 ? folderName : '폴더',
+        type: 'folder',
+        mimeType: 'application/vnd.google-apps.folder'
+      },
       children: []
     };
 
@@ -81,20 +98,22 @@ export const getPublicFolderStructure = async (folderId, depth = 0, maxDepth = 3
         // 폴더인 경우 재귀적으로 하위 구조 가져오기
         const subFolder = await getPublicFolderStructure(item.id, depth + 1, maxDepth);
         if (subFolder) {
-          subFolder.name = item.name;
+          subFolder.data.name = item.name;
           folderStructure.children.push(subFolder);
         }
       } else {
         // 파일인 경우
         folderStructure.children.push({
-          id: item.id,
-          name: item.name,
-          type: 'file',
-          mimeType: item.mimeType,
-          modifiedTime: item.modifiedTime,
-          size: item.size,
-          thumbnailLink: item.thumbnailLink,
-          webViewLink: item.webViewLink
+          data: {
+            id: item.id,
+            name: item.name,
+            type: 'file',
+            mimeType: item.mimeType,
+            modifiedTime: item.modifiedTime,
+            size: item.size,
+            thumbnailLink: item.thumbnailLink,
+            webViewLink: item.webViewLink
+          }
         });
       }
     }

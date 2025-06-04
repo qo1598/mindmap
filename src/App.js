@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import MindMap from './components/MindMap';
 import { Box, Button, CircularProgress, Typography, Snackbar, Alert, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Paper, Card, CardContent } from '@mui/material';
@@ -17,11 +17,8 @@ function App() {
   const [folderAccessInfo, setFolderAccessInfo] = useState(null);
   const [hasSelectedFolder, setHasSelectedFolder] = useState(false);
 
-  // 초기에는 폴더 ID를 설정하지 않음
-  const [rootFolderId, setRootFolderId] = useState(() => {
-    const saved = localStorage.getItem('publicFolderId');
-    return saved && saved !== 'null' ? saved : null;
-  });
+  // 초기에는 폴더 ID를 설정하지 않음 (로컬 스토리지 무시)
+  const [rootFolderId, setRootFolderId] = useState(null);
 
   // 폴더 ID가 변경될 때 로컬 스토리지에 저장
   useEffect(() => {
@@ -31,6 +28,60 @@ function App() {
     } else {
       localStorage.removeItem('publicFolderId');
       setHasSelectedFolder(false);
+    }
+  }, [rootFolderId]);
+
+  // 초기 폴더 접근 확인
+  const checkInitialFolderAccess = useCallback(async () => {
+    if (!rootFolderId) return;
+    
+    try {
+      const accessInfo = await checkFolderAccess(rootFolderId);
+      setFolderAccessInfo(accessInfo);
+      
+      if (!accessInfo.accessible) {
+        setError('폴더에 접근할 수 없습니다. 폴더가 공개로 설정되었는지 확인해주세요.');
+        setOpenSnackbar(true);
+      }
+    } catch (err) {
+      console.error('폴더 접근 확인 실패:', err);
+    }
+  }, [rootFolderId]);
+
+  // 공개 폴더 데이터 로드
+  const loadPublicFolderData = useCallback(async (isRefresh = false, folderId = null) => {
+    const targetFolderId = folderId || rootFolderId;
+    if (!targetFolderId) return;
+    
+    if (!isRefresh) {
+      setIsLoading(true);
+    }
+    
+    try {
+      console.log(`공개 폴더 데이터 로드 시작: ${targetFolderId}`);
+      
+      const folderStructure = await getPublicFolderStructure(targetFolderId, 0, 3);
+      
+      if (folderStructure) {
+        setData(folderStructure);
+        console.log('공개 폴더 데이터 로드 완료');
+        
+        if (isRefresh) {
+          setError('데이터가 새로고침되었습니다.');
+          setOpenSnackbar(true);
+        }
+      } else {
+        throw new Error('폴더 구조를 가져올 수 없습니다.');
+      }
+      
+    } catch (err) {
+      console.error('공개 폴더 데이터 로드 실패:', err);
+      setError(err.message || '데이터 로드에 실패했습니다.');
+      setOpenSnackbar(true);
+    } finally {
+      if (!isRefresh) {
+        setIsLoading(false);
+      }
     }
   }, [rootFolderId]);
 
@@ -72,60 +123,7 @@ function App() {
 
     const timeoutId = setTimeout(initPublicAPI, 500);
     return () => clearTimeout(timeoutId);
-  }, []);
-
-  // 초기 폴더 접근 확인
-  const checkInitialFolderAccess = async () => {
-    if (!rootFolderId) return;
-    
-    try {
-      const accessInfo = await checkFolderAccess(rootFolderId);
-      setFolderAccessInfo(accessInfo);
-      
-      if (!accessInfo.accessible) {
-        setError('폴더에 접근할 수 없습니다. 폴더가 공개로 설정되었는지 확인해주세요.');
-        setOpenSnackbar(true);
-      }
-    } catch (err) {
-      console.error('폴더 접근 확인 실패:', err);
-    }
-  };
-
-  // 공개 폴더 데이터 로드
-  const loadPublicFolderData = async (isRefresh = false) => {
-    if (!rootFolderId) return;
-    
-    if (!isRefresh) {
-      setIsLoading(true);
-    }
-    
-    try {
-      console.log(`공개 폴더 데이터 로드 시작: ${rootFolderId}`);
-      
-      const folderStructure = await getPublicFolderStructure(rootFolderId, 0, 3);
-      
-      if (folderStructure) {
-        setData(folderStructure);
-        console.log('공개 폴더 데이터 로드 완료');
-        
-        if (isRefresh) {
-          setError('데이터가 새로고침되었습니다.');
-          setOpenSnackbar(true);
-        }
-      } else {
-        throw new Error('폴더 구조를 가져올 수 없습니다.');
-      }
-      
-    } catch (err) {
-      console.error('공개 폴더 데이터 로드 실패:', err);
-      setError(err.message || '데이터 로드에 실패했습니다.');
-      setOpenSnackbar(true);
-    } finally {
-      if (!isRefresh) {
-        setIsLoading(false);
-      }
-    }
-  };
+  }, [checkInitialFolderAccess, loadPublicFolderData, rootFolderId]);
 
   // 구글 드라이브 선택 다이얼로그 열기
   const handleSelectDrive = () => {
@@ -170,7 +168,8 @@ function App() {
           setFolderAccessInfo(accessInfo);
           
           if (accessInfo.accessible) {
-            await loadPublicFolderData();
+            // extractedId를 직접 전달하여 state 업데이트 지연 문제 해결
+            await loadPublicFolderData(false, extractedId);
           } else {
             setError('폴더에 접근할 수 없습니다. 폴더가 공개로 설정되었는지 확인해주세요.');
             setOpenSnackbar(true);
@@ -216,7 +215,7 @@ function App() {
           </Typography>
           
           <Typography variant="h6" sx={{ mb: 3, color: '#666' }}>
-            공개 Google Drive 폴더를 아름다운 마인드맵으로 시각화하세요
+            Google Drive 폴더를 아름다운 마인드맵으로 시각화하세요
           </Typography>
           
           <Box sx={{ textAlign: 'left', mb: 4 }}>
@@ -336,7 +335,7 @@ function App() {
               {!isInitialized ? 'API 초기화 중...' : '데이터 로드 중...'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              OAuth 로그인 없이 공개 폴더에 접근 중입니다
+              Google Drive 폴더에 접근 중입니다
             </Typography>
           </Box>
         ) : data ? (

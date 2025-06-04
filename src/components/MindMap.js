@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { Box, IconButton, Tooltip, Paper, Typography, Snackbar, Alert } from '@mui/material';
+import { Box, IconButton, Tooltip, Paper, Typography, Snackbar, Alert, Button } from '@mui/material';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -8,196 +8,84 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 const MindMap = ({ data, enableDownload = false }) => {
   const svgRef = useRef(null);
   const tooltipRef = useRef(null);
-  const [selectedNode, setSelectedNode] = useState(null);
-  const [tooltipContent, setTooltipContent] = useState('');
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, content: '' });
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
-  // 디지털선도학교 로고 이미지 경로 (절대 경로로 수정)
-  const digitalSchoolLogoPath = process.env.PUBLIC_URL + '/images/digital_school_logo.png';
+  const [currentFolder, setCurrentFolder] = useState(null); // 현재 표시중인 폴더
+  const [breadcrumb, setBreadcrumb] = useState([]); // 경로 추적
+  
   // 현재 시점과 확대 정도를 저장하는 ref
   const currentViewRef = useRef({ transform: null });
 
-  const createMindMap = React.useCallback(() => {
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
-    
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
-    const g = svg.append('g')
-      .attr('transform', `translate(${width/2},${height/2})`);
-    
-    // Define zoom behavior
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 4])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-        // 현재 변환 정보 저장
-        currentViewRef.current.transform = event.transform;
-      });
-    
-    svg.call(zoom);
-    
-    // 저장된 변환 정보가 있으면 적용, 없으면 초기 상태로 설정
-    if (currentViewRef.current.transform) {
-      svg.call(zoom.transform, currentViewRef.current.transform);
-    } else {
-      svg.call(zoom.transform, d3.zoomIdentity.translate(width/2, height/2).scale(0.8));
-    }
-    
-    // Create radial layout
-    const radius = Math.min(width, height) / 2 - 120;
-    
-    // Create hierarchy from data
-    const root = d3.hierarchy(data);
-    
-    // Define custom layout (similar to radial but with modifications)
-    const layout = d3.cluster()
-      .size([360, radius]);
-    
-    // Apply layout
-    layout(root);
-    
-    // Add links
-    const linkGenerator = d3.linkRadial()
-      .angle(d => d.x * Math.PI / 180)
-      .radius(d => d.y);
-    
-    g.selectAll('.link')
-      .data(root.links())
-      .join('path')
-      .attr('class', 'link')
-      .attr('d', linkGenerator)
-      .attr('fill', 'none')
-      .attr('stroke', '#ccc')
-      .attr('stroke-width', 1.5);
-    
-    // Add nodes
-    const nodes = g.selectAll('.node')
-      .data(root.descendants())
-      .join('g')
-      .attr('class', 'node')
-      .attr('transform', d => `rotate(${d.x - 90}) translate(${d.y})`)
-      .attr('cursor', 'pointer')
-      .on('click', (event, d) => handleNodeClick(event, d))
-      .on('mouseover', (event, d) => handleMouseOver(event, d))
-      .on('mouseout', () => handleMouseOut());
-    
-    // Add node circles
-    nodes.append('circle')
-      .attr('r', d => d.depth === 0 ? 25 : d.data.type === 'folder' ? 15 : 8)
-      .attr('class', d => {
-        if (d.depth === 0) return 'central-node';
-        return d.data.type === 'folder' ? 'folder-node' : 'file-node';
-      })
-      .attr('fill', d => {
-        if (d.depth === 0) return '#8B4513';
-        return d.data.type === 'folder' ? '#FFD700' : '#fff';
-      })
-      .attr('stroke', d => {
-        if (d.depth === 0) return '#8B4513';
-        return d.data.type === 'folder' ? '#DAA520' : '#2E8B57';
-      })
-      .attr('stroke-width', 1.5);
-    
-    // 디지털선도학교 로고를 중앙 노드와 폴더 노드에 추가
-    nodes.filter(d => d.depth === 0)
-      .each(function(d) {
-        const node = d3.select(this);
-        
-        // 디지털선도학교 로고 이미지 추가 
-        node.append('image')
-          .attr('xlink:href', digitalSchoolLogoPath)
-          .attr('width', 30)
-          .attr('height', 30)
-          .attr('x', -15)
-          .attr('y', -15)
-          .attr('transform', d => `rotate(${90 - d.x})`)
-          .style('pointer-events', 'none')
-          .on('error', function() {
-            console.error('로고 이미지 로드 실패:', digitalSchoolLogoPath);
-            // 이미지 로드 실패 시 대체 텍스트 표시
-            d3.select(this).remove();
-            node.append('text')
-              .attr('dy', 5)
-              .attr('text-anchor', 'middle')
-              .attr('transform', d => `rotate(${90 - d.x})`)
-              .text('DS')
-              .attr('fill', '#fff')
-              .attr('font-weight', 'bold');
-          });
-      });
-    
-    // 폴더 노드에 아이콘 추가 (중앙 노드 제외)
-    nodes.filter(d => d.data.type === 'folder' && d.depth !== 0)
-      .append('text')
-      .attr('dy', 5)
-      .attr('text-anchor', 'middle')
-      .attr('transform', d => `rotate(${90 - d.x})`)
-      .html('📁');
-    
-    // 파일 노드에 아이콘 추가
-    nodes.filter(d => d.data.type === 'file')
-      .append('text')
-      .attr('dy', 4)
-      .attr('text-anchor', 'middle')
-      .attr('transform', d => `rotate(${90 - d.x})`)
-      .html('📄');
-    
-    // Add labels
-    nodes.append('text')
-      .attr('dy', d => d.depth === 0 ? -35 : d.data.type === 'folder' ? -20 : -15)
-      .attr('text-anchor', 'middle')
-      .attr('transform', d => `rotate(${90 - d.x})`)
-      .text(d => truncateText(d.data.name, 20))
-      .attr('fill', '#333')
-      .attr('font-size', d => d.depth === 0 ? '16px' : '12px')
-      .attr('font-weight', d => d.depth === 0 ? 'bold' : 'normal');
-  }, [data, digitalSchoolLogoPath]);
+  // 유틸리티 함수들 먼저 정의
+  const truncateText = React.useCallback((text, maxLength) => {
+    if (!text) return '';
+    return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+  }, []);
 
-  useEffect(() => {
-    if (!data) return;
+  const formatFileSize = React.useCallback((bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }, []);
+
+  const getMimeTypeDescription = React.useCallback((mimeType) => {
+    if (!mimeType) return '알 수 없는 유형';
     
-    createMindMap();
+    if (mimeType.includes('folder')) return '폴더';
     
-    // Cleanup on component unmount
-    return () => {
-      const currentSvg = svgRef.current;
-      if (currentSvg) {
-        d3.select(currentSvg).selectAll('*').remove();
-      }
+    const mimeMap = {
+      'application/vnd.google-apps.document': '구글 문서',
+      'application/vnd.google-apps.spreadsheet': '구글 스프레드시트',
+      'application/vnd.google-apps.presentation': '구글 프레젠테이션',
+      'application/vnd.google-apps.form': '구글 설문지',
+      'application/vnd.google-apps.drawing': '구글 드로잉',
+      'application/pdf': 'PDF 문서',
+      'image/jpeg': 'JPEG 이미지',
+      'image/png': 'PNG 이미지',
+      'text/plain': '텍스트 파일',
+      'text/html': 'HTML 파일',
+      'application/zip': 'ZIP 압축파일',
+      'video/mp4': 'MP4 비디오',
+      'audio/mpeg': 'MP3 오디오'
     };
-  }, [data, createMindMap]);
+    
+    return mimeMap[mimeType] || mimeType;
+  }, []);
 
-  const handleNodeClick = React.useCallback(async (event, d) => {
-    event.stopPropagation();
+  const showFileDetails = React.useCallback((event, details) => {
+    // 파일 크기 포맷
+    const size = details.size ? formatFileSize(details.size) : 'N/A';
     
-    setSelectedNode(d);
+    // 날짜 포맷
+    const modified = details.modifiedTime ? new Date(details.modifiedTime).toLocaleString() : 'N/A';
+    const created = details.createdTime ? new Date(details.createdTime).toLocaleString() : 'N/A';
     
-    // 파일 노드인 경우
-    if (d.data.type === 'file') {
-      try {
-        // 전역 window.getFileDetails 함수 사용
-        const details = await window.getFileDetails(d.data.id);
-        
-        if (enableDownload) {
-          // 다운로드 처리
-          downloadFile(details);
-        } else {
-          // 기존 방식: 상세 정보 표시
-          showFileDetails(event, details);
-        }
-      } catch (error) {
-        console.error('파일 정보를 가져오는 중 오류 발생:', error);
-        setNotification({
-          open: true,
-          message: '파일 정보를 가져오는 중 오류가 발생했습니다.',
-          severity: 'error'
-        });
-      }
-    }
-  }, [enableDownload]);
+    // 툴팁 콘텐츠 설정
+    const content = `
+      <div>
+        <h3>${details.name}</h3>
+        <p><strong>유형:</strong> ${getMimeTypeDescription(details.mimeType)}</p>
+        <p><strong>크기:</strong> ${size}</p>
+        <p><strong>수정됨:</strong> ${modified}</p>
+        <p><strong>생성됨:</strong> ${created}</p>
+        ${details.webViewLink ? `<p><a href="${details.webViewLink}" target="_blank" rel="noopener noreferrer">파일 열기</a></p>` : ''}
+      </div>
+    `;
+    
+    // 위치 설정
+    const x = event ? event.pageX : window.innerWidth / 2;
+    const y = event ? event.pageY : window.innerHeight / 2;
+    
+    // 툴팁 표시
+    setTooltip({
+      visible: true,
+      x: x,
+      y: y,
+      content: content
+    });
+  }, [formatFileSize, getMimeTypeDescription]);
 
   const downloadFile = React.useCallback((fileDetails) => {
     // 공개 접근 방식에서는 webViewLink를 통해 파일 접근
@@ -247,50 +135,72 @@ const MindMap = ({ data, enableDownload = false }) => {
       // 파일 상세 정보 표시
       showFileDetails(null, fileDetails);
     }
+  }, [showFileDetails]);
+
+  // 폴더 탐색 함수
+  const navigateToFolder = React.useCallback((folderNode) => {
+    if (folderNode.data.type === 'folder') {
+      setCurrentFolder(folderNode);
+      setBreadcrumb(prev => [...prev, folderNode]);
+    }
   }, []);
 
-  const showFileDetails = React.useCallback((event, details) => {
-    // 파일 크기 포맷
-    const size = details.size ? formatFileSize(details.size) : 'N/A';
+  // 상위 폴더로 이동
+  const navigateUp = React.useCallback(() => {
+    if (breadcrumb.length > 1) {
+      const newBreadcrumb = breadcrumb.slice(0, -1);
+      setBreadcrumb(newBreadcrumb);
+      setCurrentFolder(newBreadcrumb[newBreadcrumb.length - 1]);
+    } else if (breadcrumb.length === 1) {
+      setBreadcrumb([]);
+      setCurrentFolder(null);
+    }
+  }, [breadcrumb]);
+
+  const handleNodeClick = React.useCallback(async (event, d) => {
+    event.stopPropagation();
     
-    // 날짜 포맷
-    const modified = details.modifiedTime ? new Date(details.modifiedTime).toLocaleString() : 'N/A';
-    const created = details.createdTime ? new Date(details.createdTime).toLocaleString() : 'N/A';
+    // 안전한 데이터 접근
+    const nodeData = d && d.data ? d.data : d;
+    if (!nodeData) return;
     
-    // 툴팁 콘텐츠 설정
-    const content = `
-      <div>
-        <h3>${details.name}</h3>
-        <p><strong>유형:</strong> ${getMimeTypeDescription(details.mimeType)}</p>
-        <p><strong>크기:</strong> ${size}</p>
-        <p><strong>수정됨:</strong> ${modified}</p>
-        <p><strong>생성됨:</strong> ${created}</p>
-        ${details.webViewLink ? `<p><a href="${details.webViewLink}" target="_blank" rel="noopener noreferrer">파일 열기</a></p>` : ''}
-      </div>
-    `;
-    
-    // 위치 설정
-    const x = event ? event.pageX : window.innerWidth / 2;
-    const y = event ? event.pageY : window.innerHeight / 2;
-    
-    // 툴팁 표시
-    setTooltip({
-      visible: true,
-      x: x,
-      y: y,
-      content: content
-    });
-  }, []);
+    if (nodeData.type === 'folder') {
+      // 폴더 클릭 시 해당 폴더로 탐색
+      navigateToFolder(d);
+    } else {
+      // 파일 클릭 시 기존 로직
+      try {
+        const details = await window.getFileDetails(nodeData.id);
+        
+        if (enableDownload) {
+          downloadFile(details);
+        } else {
+          showFileDetails(event, details);
+        }
+      } catch (error) {
+        console.error('파일 정보를 가져오는 중 오류 발생:', error);
+        setNotification({
+          open: true,
+          message: '파일 정보를 가져오는 중 오류가 발생했습니다.',
+          severity: 'error'
+        });
+      }
+    }
+  }, [enableDownload, downloadFile, showFileDetails, navigateToFolder]);
 
   const handleMouseOver = React.useCallback((event, d) => {
+    // 안전한 데이터 접근
+    const nodeData = d && d.data ? d.data : d;
+    if (!nodeData) return;
+    
     // Show a simple tooltip
     const tooltip = d3.select(tooltipRef.current);
     tooltip
       .style('display', 'block')
       .style('left', (event.pageX + 15) + 'px')
       .style('top', (event.pageY - 10) + 'px')
-      .html(`<div><strong>${d.data.name}</strong><br/>${getMimeTypeDescription(d.data.mimeType)}</div>`);
-  }, []);
+      .html(`<div><strong>${nodeData.name || '알 수 없음'}</strong><br/>${getMimeTypeDescription(nodeData.mimeType)}</div>`);
+  }, [getMimeTypeDescription]);
 
   const handleMouseOut = React.useCallback(() => {
     d3.select(tooltipRef.current)
@@ -302,7 +212,7 @@ const MindMap = ({ data, enableDownload = false }) => {
     const width = window.innerWidth;
     const height = window.innerHeight;
     
-    const defaultTransform = d3.zoomIdentity.translate(width/2, height/2).scale(0.8);
+    const defaultTransform = d3.zoomIdentity.translate(width/2, height/2).scale(0.7);
     
     svg.transition()
       .duration(750)
@@ -362,45 +272,407 @@ const MindMap = ({ data, enableDownload = false }) => {
     setNotification({ ...notification, open: false });
   }, [notification]);
 
-  const truncateText = React.useCallback((text, maxLength) => {
-    if (!text) return '';
-    return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
-  }, []);
+  // 초기화 - 데이터가 변경될 때 루트로 리셋
+  useEffect(() => {
+    if (data) {
+      setCurrentFolder(null);
+      setBreadcrumb([]);
+    }
+  }, [data]);
 
-  const formatFileSize = React.useCallback((bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }, []);
-
-  const getMimeTypeDescription = React.useCallback((mimeType) => {
-    if (!mimeType) return '알 수 없는 유형';
+  const createMindMap = React.useCallback(() => {
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
     
-    if (mimeType.includes('folder')) return '폴더';
+    const width = window.innerWidth;
+    const height = window.innerHeight;
     
-    const mimeMap = {
-      'application/vnd.google-apps.document': '구글 문서',
-      'application/vnd.google-apps.spreadsheet': '구글 스프레드시트',
-      'application/vnd.google-apps.presentation': '구글 프레젠테이션',
-      'application/vnd.google-apps.form': '구글 설문지',
-      'application/vnd.google-apps.drawing': '구글 드로잉',
-      'application/pdf': 'PDF 문서',
-      'image/jpeg': 'JPEG 이미지',
-      'image/png': 'PNG 이미지',
-      'text/plain': '텍스트 파일',
-      'text/html': 'HTML 파일',
-      'application/zip': 'ZIP 압축파일',
-      'video/mp4': 'MP4 비디오',
-      'audio/mpeg': 'MP3 오디오'
+    // 현재 표시할 데이터 결정
+    const displayData = currentFolder || data;
+    if (!displayData || !displayData.data) return;
+    
+    // 중앙 노드 데이터 준비
+    const centralNodeData = {
+      data: displayData.data,
+      x: 0,
+      y: 0,
+      isCentral: true
     };
     
-    return mimeMap[mimeType] || mimeType;
-  }, []);
+    // 자식 노드들 준비
+    const children = displayData.children || [];
+    const childNodes = children.map((child, index) => {
+      const angle = (2 * Math.PI * index) / children.length - Math.PI / 2;
+      const radius = Math.min(280, Math.max(180, children.length * 20)); // 더 넓은 간격
+      
+      return {
+        data: child.data,
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        isCentral: false,
+        originalNode: child
+      };
+    });
+    
+    // 모든 노드 데이터
+    const nodes = [centralNodeData, ...childNodes];
+    
+    // 링크 데이터
+    const links = childNodes.map(child => ({
+      source: { x: 0, y: 0 },
+      target: { x: child.x, y: child.y }
+    }));
+    
+    // 그라데이션 및 필터 정의
+    const defs = svg.append('defs');
+    
+    // 중앙 노드용 그라데이션
+    const centralGradient = defs.append('linearGradient')
+      .attr('id', 'centralGradient')
+      .attr('x1', '0%').attr('y1', '0%')
+      .attr('x2', '100%').attr('y2', '100%');
+    centralGradient.append('stop')
+      .attr('offset', '0%')
+      .attr('style', 'stop-color:#4285F4;stop-opacity:1');
+    centralGradient.append('stop')
+      .attr('offset', '100%')
+      .attr('style', 'stop-color:#1565C0;stop-opacity:1');
+    
+    // 폴더 노드용 그라데이션
+    const folderGradient = defs.append('linearGradient')
+      .attr('id', 'folderGradient')
+      .attr('x1', '0%').attr('y1', '0%')
+      .attr('x2', '100%').attr('y2', '100%');
+    folderGradient.append('stop')
+      .attr('offset', '0%')
+      .attr('style', 'stop-color:#FFC107;stop-opacity:1');
+    folderGradient.append('stop')
+      .attr('offset', '100%')
+      .attr('style', 'stop-color:#FF8F00;stop-opacity:1');
+    
+    // 파일 노드용 그라데이션
+    const fileGradient = defs.append('linearGradient')
+      .attr('id', 'fileGradient')
+      .attr('x1', '0%').attr('y1', '0%')
+      .attr('x2', '100%').attr('y2', '100%');
+    fileGradient.append('stop')
+      .attr('offset', '0%')
+      .attr('style', 'stop-color:#4CAF50;stop-opacity:1');
+    fileGradient.append('stop')
+      .attr('offset', '100%')
+      .attr('style', 'stop-color:#2E7D32;stop-opacity:1');
+    
+    // 드롭 섀도우 필터
+    const filter = defs.append('filter')
+      .attr('id', 'drop-shadow')
+      .attr('x', '-50%')
+      .attr('y', '-50%')
+      .attr('width', '200%')
+      .attr('height', '200%');
+    filter.append('feDropShadow')
+      .attr('dx', 2)
+      .attr('dy', 3)
+      .attr('stdDeviation', 4)
+      .attr('flood-color', 'rgba(0,0,0,0.2)');
+    
+    const g = svg.append('g');
+    
+    // 부드러운 줌 동작 정의
+    const zoom = d3.zoom()
+      .scaleExtent([0.3, 2])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+        currentViewRef.current.transform = event.transform;
+        
+        // 줌 레벨에 따른 레이블 표시/숨김
+        const scale = event.transform.k;
+        g.selectAll('.node-card')
+          .style('opacity', scale > 0.2 ? 1 : 0.7);
+      });
+    
+    svg.call(zoom);
+    
+    // 초기 뷰 설정
+    const initialTransform = d3.zoomIdentity.translate(width/2, height/2).scale(0.8);
+    svg.call(zoom.transform, initialTransform);
+    currentViewRef.current.transform = initialTransform;
+    
+    // 직선 연결선
+    const linkElements = g.selectAll('.link')
+      .data(links)
+      .join('line')
+      .attr('class', 'link')
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y)
+      .attr('stroke', '#E1E8ED')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0);
+    
+    // 링크 애니메이션
+    linkElements.transition()
+      .duration(600)
+      .attr('opacity', 0.4);
+    
+    // 노드 그룹 생성
+    const nodeElements = g.selectAll('.node')
+      .data(nodes)
+      .join('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x}, ${d.y})`)
+      .attr('opacity', 0)
+      .style('cursor', 'pointer');
+    
+    // 카드형 배경 (중앙은 원형 유지, 나머지는 둥근 사각형)
+    nodeElements.append('rect')
+      .attr('class', 'node-card')
+      .attr('rx', d => d.isCentral ? 30 : 8)
+      .attr('ry', d => d.isCentral ? 30 : 8)
+      .attr('width', d => {
+        if (d.isCentral) return 60;
+        const name = d.data && d.data.name ? d.data.name : '알 수 없음';
+        // 아이콘 공간(30px) + 텍스트 공간 + 패딩(20px)을 고려한 최소 너비
+        const textWidth = Math.min(name.length * 8, 120); // 텍스트 최대 120px
+        return Math.max(110, textWidth + 50);
+      })
+      .attr('height', d => d.isCentral ? 60 : 40)
+      .attr('x', d => {
+        if (d.isCentral) return -30;
+        const name = d.data && d.data.name ? d.data.name : '알 수 없음';
+        const textWidth = Math.min(name.length * 8, 120);
+        const width = Math.max(110, textWidth + 50);
+        return -width / 2;
+      })
+      .attr('y', d => d.isCentral ? -30 : -20)
+      .attr('fill', d => {
+        if (d.isCentral) return 'url(#centralGradient)';
+        const nodeType = d.data && d.data.type ? d.data.type : 'file';
+        return nodeType === 'folder' ? 'url(#folderGradient)' : 'url(#fileGradient)';
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2)
+      .style('filter', 'url(#drop-shadow)');
+    
+    // 아이콘 (중앙 노드만)
+    nodeElements.filter(d => d.isCentral)
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 8)
+      .attr('font-size', '28px')
+      .attr('fill', '#fff')
+      .text('🗂️');
+    
+    // 작은 아이콘 (자식 노드들)
+    nodeElements.filter(d => !d.isCentral)
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 2)
+      .attr('x', d => {
+        const name = d.data && d.data.name ? d.data.name : '알 수 없음';
+        const textWidth = Math.min(name.length * 8, 120);
+        const width = Math.max(110, textWidth + 50);
+        return -width / 2 + 15;
+      })
+      .attr('font-size', '16px')
+      .attr('fill', '#fff')
+      .text(d => {
+        const nodeType = d.data && d.data.type ? d.data.type : 'file';
+        return nodeType === 'folder' ? '📁' : '📄';
+      });
+    
+    // 텍스트 레이블
+    const labels = nodeElements.append('text')
+      .attr('class', 'node-label')
+      .attr('text-anchor', d => d.isCentral ? 'middle' : 'start')
+      .attr('dy', d => d.isCentral ? 50 : 2)
+      .attr('x', d => {
+        if (d.isCentral) return 0;
+        const name = d.data && d.data.name ? d.data.name : '알 수 없음';
+        const textWidth = Math.min(name.length * 8, 120);
+        const width = Math.max(110, textWidth + 50);
+        return -width / 2 + 32;
+      })
+      .attr('font-size', d => d.isCentral ? '14px' : '12px')
+      .attr('font-weight', d => d.isCentral ? 'bold' : 'normal')
+      .attr('fill', d => d.isCentral ? '#2C3E50' : '#fff')
+      .text(d => {
+        const name = d.data && d.data.name ? d.data.name : '알 수 없음';
+        if (d.isCentral) {
+          return truncateText(name, 15);
+        }
+        // 자식 노드는 사용 가능한 텍스트 공간에 맞게 조절 (아이콘 공간 제외)
+        const availableWidth = 120; // 최대 텍스트 너비
+        const maxChars = Math.floor(availableWidth / 8); // 8px per char
+        return truncateText(name, Math.min(maxChars, 15));
+      });
+    
+    // 호버 이벤트
+    nodeElements
+      .on('click', (event, d) => {
+        const nodeToPass = d.isCentral ? displayData : (d.originalNode || d);
+        handleNodeClick(event, nodeToPass);
+      })
+      .on('mouseover', (event, d) => {
+        // 전체 이름을 툴팁으로 표시
+        const fullName = d.data && d.data.name ? d.data.name : '알 수 없음';
+        handleMouseOver(event, d);
+        
+        // 호버 효과
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(200)
+          .attr('transform', `translate(${d.x}, ${d.y}) scale(1.05)`);
+        
+        // 카드 밝기 증가
+        d3.select(event.currentTarget).select('.node-card')
+          .transition()
+          .duration(200)
+          .style('filter', 'url(#drop-shadow) brightness(1.1)');
+      })
+      .on('mouseout', (event, d) => {
+        handleMouseOut();
+        
+        // 호버 해제 효과
+        d3.select(event.currentTarget)
+          .transition()
+          .duration(200)
+          .attr('transform', `translate(${d.x}, ${d.y}) scale(1)`);
+        
+        // 카드 원래 밝기로
+        d3.select(event.currentTarget).select('.node-card')
+          .transition()
+          .duration(200)
+          .style('filter', 'url(#drop-shadow)');
+      });
+    
+    // 노드 출현 애니메이션
+    nodeElements.transition()
+      .duration(500)
+      .delay((d, i) => i * 80)
+      .attr('opacity', 1)
+      .ease(d3.easeBackOut);
+    
+  }, [data, currentFolder, handleNodeClick, handleMouseOver, handleMouseOut, truncateText]);
+
+  useEffect(() => {
+    if (!data) return;
+    
+    createMindMap();
+    
+    // Cleanup on component unmount
+    return () => {
+      const currentSvg = svgRef.current;
+      if (currentSvg) {
+        d3.select(currentSvg).selectAll('*').remove();
+      }
+    };
+  }, [data, createMindMap]);
 
   return (
     <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* 경로 표시 및 뒤로가기 버튼 */}
+      {breadcrumb.length > 0 && (
+        <Box 
+          sx={{ 
+            position: 'absolute', 
+            top: 20, 
+            left: 20, 
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            padding: '12px 16px',
+            borderRadius: '24px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            maxWidth: '60%',
+            flexWrap: 'wrap'
+          }}
+        >
+          <IconButton 
+            size="small" 
+            onClick={navigateUp}
+            sx={{ 
+              backgroundColor: '#4285F4',
+              color: 'white',
+              width: 32,
+              height: 32,
+              '&:hover': { backgroundColor: '#1565C0' }
+            }}
+          >
+            <RestartAltIcon style={{ transform: 'rotate(180deg)', fontSize: '18px' }} />
+          </IconButton>
+          
+          {/* 루트 폴더 버튼 */}
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => {
+              setBreadcrumb([]);
+              setCurrentFolder(null);
+            }}
+            sx={{
+              minWidth: 'auto',
+              padding: '4px 8px',
+              color: breadcrumb.length === 1 ? '#4285F4' : '#666',
+              fontWeight: breadcrumb.length === 1 ? 'bold' : 'normal',
+              '&:hover': { backgroundColor: 'rgba(66, 133, 244, 0.1)' }
+            }}
+          >
+            🏠 루트
+          </Button>
+          
+          {/* 각 폴더 경로 버튼들 */}
+          {breadcrumb.map((folder, index) => (
+            <React.Fragment key={folder.data.id}>
+              <Typography variant="body2" sx={{ color: '#999', mx: 0.5 }}>
+                /
+              </Typography>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  // 해당 폴더로 바로 이동
+                  const newBreadcrumb = breadcrumb.slice(0, index + 1);
+                  setBreadcrumb(newBreadcrumb);
+                  setCurrentFolder(folder);
+                }}
+                sx={{
+                  minWidth: 'auto',
+                  padding: '4px 8px',
+                  color: index === breadcrumb.length - 1 ? '#4285F4' : '#666',
+                  fontWeight: index === breadcrumb.length - 1 ? 'bold' : 'normal',
+                  maxWidth: '120px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  '&:hover': { backgroundColor: 'rgba(66, 133, 244, 0.1)' }
+                }}
+                title={folder.data.name} // 전체 이름 툴팁
+              >
+                📁 {truncateText(folder.data.name, 10)}
+              </Button>
+            </React.Fragment>
+          ))}
+          
+          {breadcrumb.length > 1 && (
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                color: '#999', 
+                ml: 1,
+                backgroundColor: 'rgba(0,0,0,0.05)',
+                padding: '2px 6px',
+                borderRadius: '8px'
+              }}
+            >
+              {breadcrumb.length}단계 깊이
+            </Typography>
+          )}
+        </Box>
+      )}
+
       <svg ref={svgRef} width="100%" height="100%" style={{ background: 'transparent' }}></svg>
       
       <div 
