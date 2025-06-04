@@ -200,74 +200,33 @@ const MindMap = ({ data, enableDownload = false }) => {
   };
 
   const downloadFile = (fileDetails) => {
-    if (!fileDetails.webContentLink && !fileDetails.webViewLink) {
-      // 구글 문서 형식인 경우 내보내기 URL 생성
-      if (fileDetails.mimeType.includes('google-apps')) {
-        let exportMimeType = '';
-        let exportExt = '';
-        
-        // 각 구글 문서 타입에 맞는 내보내기 형식 지정
-        if (fileDetails.mimeType.includes('document')) {
-          exportMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          exportExt = 'docx';
-        } else if (fileDetails.mimeType.includes('spreadsheet')) {
-          exportMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-          exportExt = 'xlsx';
-        } else if (fileDetails.mimeType.includes('presentation')) {
-          exportMimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-          exportExt = 'pptx';
-        } else if (fileDetails.mimeType.includes('drawing')) {
-          exportMimeType = 'image/png';
-          exportExt = 'png';
-        } else {
-          exportMimeType = 'application/pdf';
-          exportExt = 'pdf';
-        }
-        
-        // 내보내기 URL
-        const exportUrl = `https://www.googleapis.com/drive/v3/files/${fileDetails.id}/export?mimeType=${encodeURIComponent(exportMimeType)}`;
-        
-        // 액세스 토큰 가져오기
-        const token = window.gapi.client.getToken();
-        if (token) {
-          // 다운로드 링크 생성 및 클릭
-          const downloadLink = document.createElement('a');
-          downloadLink.href = exportUrl + '&alt=media&access_token=' + token.access_token;
-          downloadLink.download = `${fileDetails.name}.${exportExt}`;
-          downloadLink.target = '_blank';
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-          
-          setNotification({
-            open: true,
-            message: `"${fileDetails.name}" 다운로드 중...`,
-            severity: 'info'
-          });
-        } else {
-          setNotification({
-            open: true,
-            message: '인증 토큰이 없어 다운로드할 수 없습니다.',
-            severity: 'error'
-          });
-        }
+    // 공개 접근 방식에서는 webViewLink를 통해 파일 접근
+    if (fileDetails.webViewLink) {
+      // Google Drive에서 제공하는 파일 보기 링크로 이동
+      const viewUrl = fileDetails.webViewLink;
+      
+      // 새 탭에서 파일 열기
+      const newWindow = window.open(viewUrl, '_blank', 'noopener,noreferrer');
+      
+      if (newWindow) {
+        setNotification({
+          open: true,
+          message: `"${fileDetails.name}" 파일을 새 탭에서 열었습니다. Google Drive에서 다운로드할 수 있습니다.`,
+          severity: 'info'
+        });
       } else {
         setNotification({
           open: true,
-          message: '이 파일은 다운로드 링크가 제공되지 않습니다.',
+          message: '팝업이 차단되었습니다. 브라우저 설정을 확인해주세요.',
           severity: 'warning'
         });
-        // 대신 상세 정보 표시
-        showFileDetails(null, fileDetails);
       }
-    } else {
+    } else if (fileDetails.webContentLink) {
       // 직접 다운로드 링크가 있는 경우
-      const downloadUrl = fileDetails.webContentLink || fileDetails.webViewLink;
-      
-      // 다운로드 링크 클릭
       const downloadLink = document.createElement('a');
-      downloadLink.href = downloadUrl;
+      downloadLink.href = fileDetails.webContentLink;
       downloadLink.target = '_blank';
+      downloadLink.rel = 'noopener noreferrer';
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -277,6 +236,16 @@ const MindMap = ({ data, enableDownload = false }) => {
         message: `"${fileDetails.name}" 다운로드 중...`,
         severity: 'info'
       });
+    } else {
+      // 다운로드 링크가 없는 경우 파일 상세 정보 표시
+      setNotification({
+        open: true,
+        message: `"${fileDetails.name}"은 공개 접근으로는 직접 다운로드할 수 없습니다. 파일 정보를 확인하세요.`,
+        severity: 'warning'
+      });
+      
+      // 파일 상세 정보 표시
+      showFileDetails(null, fileDetails);
     }
   };
 

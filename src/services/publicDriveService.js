@@ -126,4 +126,57 @@ export const checkFolderAccess = async (folderId) => {
       error: error.message
     };
   }
+};
+
+// 공개 파일 상세 정보 가져오기 (MindMap에서 사용)
+export const getPublicFileDetails = async (fileId) => {
+  try {
+    console.log(`공개 파일 상세 정보 조회: ${fileId}`);
+    
+    const response = await window.gapi.client.drive.files.get({
+      fileId: fileId,
+      fields: 'id,name,mimeType,size,modifiedTime,createdTime,webViewLink,webContentLink,thumbnailLink,iconLink'
+    });
+    
+    console.log('파일 상세 정보 조회 성공:', response.result.name);
+    return response.result;
+  } catch (error) {
+    console.error('공개 파일 상세 정보 조회 실패:', error);
+    
+    if (error.status === 403) {
+      throw new Error('파일이 공개로 설정되지 않았거나 접근 권한이 없습니다.');
+    } else if (error.status === 404) {
+      throw new Error('파일을 찾을 수 없습니다.');
+    } else {
+      throw new Error(`파일 정보 조회 실패: ${error.message || '알 수 없는 오류'}`);
+    }
+  }
+};
+
+// Google Drive 링크에서 ID 추출하는 유틸리티 함수
+export const extractIdFromDriveLink = (link) => {
+  if (!link || typeof link !== 'string') {
+    return null;
+  }
+
+  // 다양한 Google Drive 링크 형식 지원
+  const patterns = [
+    // 폴더 링크: https://drive.google.com/drive/folders/FOLDER_ID
+    /drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/,
+    // 파일 링크: https://drive.google.com/file/d/FILE_ID/view
+    /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+    // 공유 링크: https://drive.google.com/open?id=ID
+    /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+    // 직접 ID만 입력한 경우 (기존 방식 유지)
+    /^([a-zA-Z0-9_-]+)$/
+  ];
+
+  for (const pattern of patterns) {
+    const match = link.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }; 

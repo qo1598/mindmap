@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MindMap from './components/MindMap';
 import { Box, Button, CircularProgress, Typography, Snackbar, Alert, Switch, FormControlLabel, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Paper } from '@mui/material';
-import { initPublicGoogleAPI, getPublicFolderStructure, checkFolderAccess } from './services/publicDriveService';
+import { initPublicGoogleAPI, getPublicFolderStructure, checkFolderAccess, getPublicFileDetails, extractIdFromDriveLink } from './services/publicDriveService';
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +41,10 @@ function App() {
         }
 
         await initPublicGoogleAPI();
+        
+        // MindMap에서 사용할 수 있도록 전역 함수 설정
+        window.getFileDetails = getPublicFileDetails;
+        
         setIsInitialized(true);
         console.log('공개 Google API 초기화 완료');
         
@@ -145,17 +149,42 @@ function App() {
     setFolderIdInput('');
   };
 
+  // 폴더 ID 입력 변경 시 자동 ID 추출
+  const handleFolderIdInputChange = (event) => {
+    const inputValue = event.target.value;
+    setFolderIdInput(inputValue);
+    
+    // 실시간으로 ID 추출 시도
+    const extractedId = extractIdFromDriveLink(inputValue);
+    if (extractedId && extractedId !== inputValue && inputValue.includes('drive.google.com')) {
+      // Google Drive 링크인 경우 추출된 ID로 자동 변경
+      setTimeout(() => {
+        setFolderIdInput(extractedId);
+      }, 500);
+    }
+  };
+
   const handleFolderIdSubmit = async () => {
-    if (folderIdInput.trim() && folderIdInput !== rootFolderId) {
-      setRootFolderId(folderIdInput.trim());
-      setOpenFolderDialog(false);
-      setFolderIdInput('');
+    if (folderIdInput.trim()) {
+      // 링크에서 ID 추출 시도
+      const extractedId = extractIdFromDriveLink(folderIdInput.trim());
       
-      // 새 폴더 접근 확인 및 데이터 로드
-      await checkInitialFolderAccess();
-      await loadPublicFolderData();
-    } else {
-      setOpenFolderDialog(false);
+      if (extractedId) {
+        if (extractedId !== rootFolderId) {
+          setRootFolderId(extractedId);
+          setOpenFolderDialog(false);
+          setFolderIdInput('');
+          
+          // 새 폴더 접근 확인 및 데이터 로드
+          await checkInitialFolderAccess();
+          await loadPublicFolderData();
+        } else {
+          setOpenFolderDialog(false);
+        }
+      } else {
+        setError('유효한 Google Drive 폴더 ID 또는 링크를 입력해주세요.');
+        setOpenSnackbar(true);
+      }
     }
   };
 
@@ -281,27 +310,32 @@ function App() {
       </Box>
 
       {/* 폴더 ID 변경 다이얼로그 */}
-      <Dialog open={openFolderDialog} onClose={handleFolderDialogClose}>
-        <DialogTitle>공개 폴더 ID 변경</DialogTitle>
+      <Dialog open={openFolderDialog} onClose={handleFolderDialogClose} maxWidth="sm" fullWidth>
+        <DialogTitle>공개 폴더 설정</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            "링크가 있는 모든 사용자"로 공개 설정된 Google Drive 폴더의 ID를 입력하세요.
+            Google Drive 공유 링크를 붙여넣거나 폴더 ID를 직접 입력하세요.
           </Typography>
           <TextField
             autoFocus
             fullWidth
-            label="폴더 ID"
+            label="Google Drive 링크 또는 폴더 ID"
             value={folderIdInput}
-            onChange={(e) => setFolderIdInput(e.target.value)}
-            placeholder="예: 1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9"
+            onChange={handleFolderIdInputChange}
+            placeholder="https://drive.google.com/drive/folders/... 또는 1MTFQM7oGUGDg5xYwbuuw7rwrXXfoU-a9"
             sx={{ mb: 2 }}
+            multiline
+            rows={2}
           />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+            🔗 <strong>링크 사용법:</strong> Google Drive에서 "공유" → "링크 복사"한 후 여기에 붙여넣기
+          </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            📌 사용법:<br/>
+            📌 <strong>폴더 공개 설정:</strong><br/>
             1. Google Drive에서 폴더를 우클릭<br/>
             2. "공유" 선택<br/>
             3. "링크가 있는 모든 사용자"로 설정<br/>
-            4. 공유 링크에서 폴더 ID 복사
+            4. 권한을 "뷰어"로 설정
           </Typography>
         </DialogContent>
         <DialogActions>
