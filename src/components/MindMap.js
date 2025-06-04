@@ -4,9 +4,6 @@ import { Box, IconButton, Tooltip, Paper, Typography, Snackbar, Alert } from '@m
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import FolderIcon from '@mui/icons-material/Folder';
-import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 
 const MindMap = ({ data, enableDownload = false }) => {
   const svgRef = useRef(null);
@@ -21,18 +18,7 @@ const MindMap = ({ data, enableDownload = false }) => {
   // 현재 시점과 확대 정도를 저장하는 ref
   const currentViewRef = useRef({ transform: null });
 
-  useEffect(() => {
-    if (!data) return;
-    
-    createMindMap();
-    
-    // Cleanup on component unmount
-    return () => {
-      d3.select(svgRef.current).selectAll('*').remove();
-    };
-  }, [data]);
-
-  const createMindMap = () => {
+  const createMindMap = React.useCallback(() => {
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
     
@@ -168,9 +154,23 @@ const MindMap = ({ data, enableDownload = false }) => {
       .attr('fill', '#333')
       .attr('font-size', d => d.depth === 0 ? '16px' : '12px')
       .attr('font-weight', d => d.depth === 0 ? 'bold' : 'normal');
-  };
+  }, [data, digitalSchoolLogoPath]);
 
-  const handleNodeClick = async (event, d) => {
+  useEffect(() => {
+    if (!data) return;
+    
+    createMindMap();
+    
+    // Cleanup on component unmount
+    return () => {
+      const currentSvg = svgRef.current;
+      if (currentSvg) {
+        d3.select(currentSvg).selectAll('*').remove();
+      }
+    };
+  }, [data, createMindMap]);
+
+  const handleNodeClick = React.useCallback(async (event, d) => {
     event.stopPropagation();
     
     setSelectedNode(d);
@@ -197,9 +197,9 @@ const MindMap = ({ data, enableDownload = false }) => {
         });
       }
     }
-  };
+  }, [enableDownload]);
 
-  const downloadFile = (fileDetails) => {
+  const downloadFile = React.useCallback((fileDetails) => {
     // 공개 접근 방식에서는 webViewLink를 통해 파일 접근
     if (fileDetails.webViewLink) {
       // Google Drive에서 제공하는 파일 보기 링크로 이동
@@ -247,9 +247,9 @@ const MindMap = ({ data, enableDownload = false }) => {
       // 파일 상세 정보 표시
       showFileDetails(null, fileDetails);
     }
-  };
+  }, []);
 
-  const showFileDetails = (event, details) => {
+  const showFileDetails = React.useCallback((event, details) => {
     // 파일 크기 포맷
     const size = details.size ? formatFileSize(details.size) : 'N/A';
     
@@ -280,9 +280,9 @@ const MindMap = ({ data, enableDownload = false }) => {
       y: y,
       content: content
     });
-  };
+  }, []);
 
-  const handleMouseOver = (event, d) => {
+  const handleMouseOver = React.useCallback((event, d) => {
     // Show a simple tooltip
     const tooltip = d3.select(tooltipRef.current);
     tooltip
@@ -290,14 +290,14 @@ const MindMap = ({ data, enableDownload = false }) => {
       .style('left', (event.pageX + 15) + 'px')
       .style('top', (event.pageY - 10) + 'px')
       .html(`<div><strong>${d.data.name}</strong><br/>${getMimeTypeDescription(d.data.mimeType)}</div>`);
-  };
+  }, []);
 
-  const handleMouseOut = () => {
+  const handleMouseOut = React.useCallback(() => {
     d3.select(tooltipRef.current)
       .style('display', 'none');
-  };
+  }, []);
 
-  const resetZoom = () => {
+  const resetZoom = React.useCallback(() => {
     const svg = d3.select(svgRef.current);
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -313,9 +313,9 @@ const MindMap = ({ data, enableDownload = false }) => {
       
     // 초기화된 변환 정보 저장
     currentViewRef.current.transform = defaultTransform;
-  };
+  }, []);
 
-  const zoomIn = () => {
+  const zoomIn = React.useCallback(() => {
     const svg = d3.select(svgRef.current);
     
     // 현재 변환 정보
@@ -332,9 +332,9 @@ const MindMap = ({ data, enableDownload = false }) => {
       
     // 업데이트된 변환 정보 저장
     currentViewRef.current.transform = newTransform;
-  };
+  }, []);
 
-  const zoomOut = () => {
+  const zoomOut = React.useCallback(() => {
     const svg = d3.select(svgRef.current);
     
     // 현재 변환 정보
@@ -351,31 +351,31 @@ const MindMap = ({ data, enableDownload = false }) => {
       
     // 업데이트된 변환 정보 저장
     currentViewRef.current.transform = newTransform;
-  };
+  }, []);
 
-  const handleCloseTooltip = () => {
+  const handleCloseTooltip = React.useCallback(() => {
     setTooltip({ ...tooltip, visible: false });
-  };
+  }, [tooltip]);
 
-  const handleCloseNotification = (event, reason) => {
+  const handleCloseNotification = React.useCallback((event, reason) => {
     if (reason === 'clickaway') return;
     setNotification({ ...notification, open: false });
-  };
+  }, [notification]);
 
-  const truncateText = (text, maxLength) => {
+  const truncateText = React.useCallback((text, maxLength) => {
     if (!text) return '';
     return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
-  };
+  }, []);
 
-  const formatFileSize = (bytes) => {
+  const formatFileSize = React.useCallback((bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  }, []);
 
-  const getMimeTypeDescription = (mimeType) => {
+  const getMimeTypeDescription = React.useCallback((mimeType) => {
     if (!mimeType) return '알 수 없는 유형';
     
     if (mimeType.includes('folder')) return '폴더';
@@ -397,7 +397,7 @@ const MindMap = ({ data, enableDownload = false }) => {
     };
     
     return mimeMap[mimeType] || mimeType;
-  };
+  }, []);
 
   return (
     <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
